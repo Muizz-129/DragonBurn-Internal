@@ -40,6 +40,6 @@ Please note that several features from the original project have been intentiona
 If you encounter any bugs, crashes, broken features after a CS2 update, or simply want to complain about something, feel free to open an **[Issue](https://github.com/Muizz-129/DragonBurn-Internal/issues)**. 
 To be completely honest, I'm currently too lazy to test and check every single detail by myself, so detailed bug reports, constructive complaints, and Pull Requests are always welcome!
 
-##Upcoming Updates
+## Upcoming Updates
 
 Future updates will include an **auto-update offsets** system so the menu continues working seamlessly across new CS2 game patches without needing manual offset updates every time.
