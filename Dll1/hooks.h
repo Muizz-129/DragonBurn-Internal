@@ -13,10 +13,12 @@ namespace Hooks {
     inline Present_t       oPresent = nullptr;
     inline ResizeBuffers_t oResizeBuffers = nullptr;
 
+    inline Present_t* g_pPresentPtr = nullptr;
+    inline ResizeBuffers_t* g_pResizePtr = nullptr;
+
 #define PRESENT_PATTERN "48 89 5C 24 ? 48 89 6C 24 ? 56 57 41 54 41 56 41 57 48 83 EC ? 41 8B F0"
 #define STEAM_FALLBACK_PRESENT_OFFSET 0x162200
 
-    // Allocate debug console and safely eject DLL on critical failure
     inline void show_error_console(const char* error_message, HMODULE hModule) {
         AllocConsole();
         FILE* fp = nullptr;
@@ -113,7 +115,6 @@ namespace Hooks {
     inline DWORD WINAPI hook_thread(LPVOID lpParam) {
         HMODULE hModule = static_cast<HMODULE>(lpParam);
 
-        // 1. Wait for Steam GameOverlayRenderer64.dll to load
         HMODULE hOverlay = nullptr;
         for (int i = 0; i < 100 && !hOverlay; i++) {
             hOverlay = GetModuleHandleA("GameOverlayRenderer64.dll");
@@ -128,7 +129,7 @@ namespace Hooks {
         Present_t* pPresentPtr = nullptr;
         ResizeBuffers_t* pResizePtr = nullptr;
 
-        // 2. Perform signature scan on Steam overlay
+        // 2. Pattern scan Steam overlay
         uintptr_t fn_present_wrapper = scan_steam_pattern(hOverlay, PRESENT_PATTERN);
         if (fn_present_wrapper) {
             for (int i = 0; i < 64; ++i) {
@@ -142,35 +143,49 @@ namespace Hooks {
             }
         }
 
-        // 3. Fallback to hardcoded offset if signature scan fails
         if (!pPresentPtr) {
             pPresentPtr = (Present_t*)((BYTE*)hOverlay + STEAM_FALLBACK_PRESENT_OFFSET);
             pResizePtr = (ResizeBuffers_t*)((BYTE*)hOverlay + STEAM_FALLBACK_PRESENT_OFFSET + 0x8);
         }
 
-        // 4. Wait for pointer initialization
         for (int i = 0; i < 100; i++) {
             if (pPresentPtr && *pPresentPtr) break;
             Sleep(100);
         }
 
-        // 5. If hook pointer is null, display console and terminate thread safely
         if (!pPresentPtr || !*pPresentPtr) {
             show_error_console("Failed to locate Present hook pointer. Signatures might be outdated.", hModule);
             return 0;
         }
 
-        oPresent = *pPresentPtr;
-        oResizeBuffers = *pResizePtr;
+        g_pPresentPtr = pPresentPtr;
+        g_pResizePtr = pResizePtr;
 
-        // 6. Swap Present and ResizeBuffers pointers
+        oPresent = *g_pPresentPtr;
+        oResizeBuffers = *g_pResizePtr;
         DWORD oldProt = 0;
-        if (VirtualProtect(pPresentPtr, sizeof(void*) * 2, PAGE_READWRITE, &oldProt)) {
-            *pPresentPtr = (Present_t)hkPresent;
-            *pResizePtr = (ResizeBuffers_t)hkResizeBuffers;
-            VirtualProtect(pPresentPtr, sizeof(void*) * 2, oldProt, &oldProt);
+        if (VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, PAGE_READWRITE, &oldProt)) {
+            *g_pPresentPtr = (Present_t)hkPresent;
+            *g_pResizePtr = (ResizeBuffers_t)hkResizeBuffers;
+            VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, oldProt, &oldProt);
         }
 
         return 0;
+    }
+
+    inline void unhook() {
+        if (g_pPresentPtr && oPresent && g_pResizePtr && oResizeBuffers) {
+            DWORD oldProt = 0;
+            if (VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, PAGE_READWRITE, &oldProt)) {
+                *g_pPresentPtr = oPresent;
+                *g_pResizePtr = oResizeBuffers;
+                VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, oldProt, &oldProt);
+            }
+
+            g_pPresentPtr = nullptr;
+            g_pResizePtr = nullptr;
+            oPresent = nullptr;
+            oResizeBuffers = nullptr;
+        }
     }
 }
