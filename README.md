@@ -7,7 +7,7 @@ This project is an internal port and redesign built with reference to the follow
 * **[ByteCorum / DragonBurn](https://github.com/ByteCorum/DragonBurn)** – Original base logic, game structures, and core features.
 * **[Cl1cker0 / St-Mbappe](https://github.com/Cl1cker0/St-Mbappe)** – Reference for the internal architecture, DirectX 11 overlay hook, and custom UI design.
 
-##Features
+## Features
 
 * **Direct3D 11 Hook:** Integrated via Steam's `GameOverlayRenderer64.dll`.
 * **ImGui Modern UI:** Custom styled interface with tab navigation and themes.
@@ -22,7 +22,7 @@ This project is an internal port and redesign built with reference to the follow
 
 ---
 
-##Building from Source
+## Building from Source
 
 ### Prerequisites & Dependencies
 * **Operating System:** Windows 10 / 11 (64-bit)
