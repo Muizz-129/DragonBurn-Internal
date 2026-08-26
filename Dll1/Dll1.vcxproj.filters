@@ -1,0 +1,264 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="theme">
+      <UniqueIdentifier>{3f7a607c-4910-4ca0-b498-efb6105503da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="helpers">
+      <UniqueIdentifier>{6bfbd44b-40e3-4d63-a957-3be3ad4d7caa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="imgui">
+      <UniqueIdentifier>{68e97701-c54b-40b9-b096-de972c75e33f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="imgui\backends">
+      <UniqueIdentifier>{f95acd3e-9185-466b-9530-fe67cfbc1736}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="font">
+      <UniqueIdentifier>{396d28cf-edbf-41c7-a5dd-b5835197427e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui">
+      <UniqueIdentifier>{b9e19e56-b7b0-461a-87c5-91154d50bf49}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui\draw">
+      <UniqueIdentifier>{cbb424c1-dfca-46d6-b256-b810ddf95fdd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui\sidebar">
+      <UniqueIdentifier>{bc50e6d8-f9c9-4c20-b658-f5f18b1cc0f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui\topbar">
+      <UniqueIdentifier>{654b8d22-6830-44d3-adf6-99fb3e726996}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui\widgets">
+      <UniqueIdentifier>{85f5fc91-b4ea-4584-ba25-bbdd338e3405}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source">
+      <UniqueIdentifier>{281d8107-cdf9-4954-bd87-7a5b745a3a43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="nlohmann">
+      <UniqueIdentifier>{5370df1e-068d-477b-9e9f-d85a89ae974e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="offsets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="entity_reader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="entity_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="c4_esp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="projectile_trails.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spectators.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\theme\colors.h">
+      <Filter>theme</Filter>
+    </ClInclude>
+    <ClInclude Include="..\theme\layout.h">
+      <Filter>theme</Filter>
+    </ClInclude>
+    <ClInclude Include="..\helpers\animation.h">
+      <Filter>helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\helpers\fonts.h">
+      <Filter>helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\helpers\icons.h">
+      <Filter>helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\helpers\window_drag.h">
+      <Filter>helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imconfig.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imgui.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imgui_internal.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imstb_rectpack.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imstb_textedit.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\imstb_truetype.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\stb_image.h">
+      <Filter>imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\backends\imgui_impl_dx11.h">
+      <Filter>imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="..\imgui\backends\imgui_impl_win32.h">
+      <Filter>imgui\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="bvh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fonts_data.h">
+      <Filter>font</Filter>
+    </ClInclude>
+    <ClInclude Include="fontello_data.h">
+      <Filter>font</Filter>
+    </ClInclude>
+    <ClInclude Include="chams_renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="box_renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="visible_esp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="weapon_icons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="hooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="render.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="menu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\menu_textures.h">
+      <Filter>ui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\os_widgets.h">
+      <Filter>ui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\sidebar\sidebar.h">
+      <Filter>ui\sidebar</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\topbar\topbar.h">
+      <Filter>ui\topbar</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\widgets\widgets.h">
+      <Filter>ui\widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ui\draw\fx.h">
+      <Filter>ui\draw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\Font.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\Images.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\Language.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\resource.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\Sounds.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Resources\WeaponIcon.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="crosshair.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="grenades.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\nlohmann\json.hpp">
+      <Filter>nlohmann</Filter>
+    </ClInclude>
+    <ClInclude Include="aimbot.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="aimbot_math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="theme_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\helpers\fonts.cpp">
+      <Filter>helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\helpers\icons.cpp">
+      <Filter>helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\helpers\window_drag.cpp">
+      <Filter>helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_draw.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_tables.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_widgets.cpp">
+      <Filter>imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>imgui\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="fontello_data.cpp">
+      <Filter>font</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ui\sidebar\sidebar.cpp">
+      <Filter>ui\sidebar</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ui\topbar\topbar.cpp">
+      <Filter>ui\topbar</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ui\widgets\widgets.cpp">
+      <Filter>ui\widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ui\draw\fx.cpp">
+      <Filter>ui\draw</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
