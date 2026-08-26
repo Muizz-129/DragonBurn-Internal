@@ -41,4 +41,5 @@ If you encounter any bugs, crashes, broken features after a CS2 update, or simpl
 To be completely honest, I'm currently too lazy to test and check every single detail by myself, so detailed bug reports, constructive complaints, and Pull Requests are always welcome!
 
 ##Upcoming Updates
+
 Future updates will include an **auto-update offsets** system so the menu continues working seamlessly across new CS2 game patches without needing manual offset updates every time.
