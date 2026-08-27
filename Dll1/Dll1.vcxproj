@@ -125,6 +125,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -155,6 +156,7 @@ if exist "$(ProjectDir)themes" xcopy /E /I /Y "$(ProjectDir)themes" "$(OutDir)th
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -229,6 +231,7 @@ if exist "$(ProjectDir)themes" xcopy /E /I /Y "$(ProjectDir)themes" "$(OutDir)th
     <ClInclude Include="utils.h" />
     <ClInclude Include="visible_esp.h" />
     <ClInclude Include="weapon_icons.h" />
+    <ClInclude Include="xorstr.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\helpers\fonts.cpp" />

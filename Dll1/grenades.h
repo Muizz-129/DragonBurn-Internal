@@ -151,6 +151,10 @@ public:
         load();
     }
 
+    void reload() {
+        load();
+    }
+
     // Call every frame (before ImGui render). Handles key presses.
     void update(float local_x, float local_y, float local_z,
         float view_pitch, float view_yaw,
@@ -159,8 +163,8 @@ public:
         if (!g_settings.grenade_helper_enabled) return;
 
         // Toggle visibility
-        if (GetAsyncKeyState(g_settings.key_grenade_toggle) & 1)
-            g_settings.grenade_helper_visible = !g_settings.grenade_helper_visible;
+        if (g_settings.key_grenade_toggle > 0 && (GetAsyncKeyState(g_settings.key_grenade_toggle) & 1))
+        g_settings.grenade_helper_visible = !g_settings.grenade_helper_visible;
 
         // Add spot — also opens the menu so overlay is interactive
         if ((GetAsyncKeyState(g_settings.key_grenade_add) & 1)
@@ -385,6 +389,13 @@ public:
     // ============================================================
 
     void render_spot_list() {
+        if (ImGui::Button("Reload JSON Data")) {
+            load();
+        }
+        ImGui::SameLine();
+        ImGui::Text("Loaded Maps: %d", (int)all_maps.size());
+        ImGui::Separator();
+
         MapSpots* ms = find_map(current_map);
         if (!ms || ms->spots.empty()) {
             ImGui::TextColored({ 0.5f,0.5f,0.5f,1 }, "No spots for %s",

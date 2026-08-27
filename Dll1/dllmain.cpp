@@ -6,7 +6,7 @@
 
 DWORD WINAPI MainThread(LPVOID lpParam) {
     // Load settings from config file
-    Config::load(get_dll_directory() + "config.ini");
+    Config::load(get_dll_directory() + _xor_("config.ini").c_str());
 
     // Start aimbot worker thread
     start_aimbot_thread();
@@ -20,7 +20,11 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
-        CreateThread(nullptr, 0, MainThread, hModule, 0, nullptr);
+
+        HANDLE hThread = CreateThread(nullptr, 0, MainThread, hModule, 0, nullptr);
+        if (hThread) {
+            CloseHandle(hThread);
+        }
     }
     return TRUE;
 }

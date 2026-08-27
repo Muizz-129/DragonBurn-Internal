@@ -15,7 +15,6 @@
 #include "../helpers/icons.h"
 #include "../helpers/fonts.h"
 
-
 struct PlantedC4State {
     uintptr_t entity = 0;
     Vec3      world_pos{};
@@ -28,10 +27,6 @@ struct PlantedC4State {
     bool      valid = false;
 };
 
-inline bool is_valid_ptr(uintptr_t ptr) {
-    return (ptr >= 0x10000 && ptr < 0x00007FFFFFFFFFFF);
-}
-
 static float get_cur_time() {
     uintptr_t client = Offsets::get_client_base();
     if (!client || !g_offsets.client.dwGlobalVars) return 0.f;
@@ -39,7 +34,8 @@ static float get_cur_time() {
     __try {
         uintptr_t gv_base = client + g_offsets.client.dwGlobalVars;
         uintptr_t gv_ptr = *reinterpret_cast<const uintptr_t*>(gv_base);
-        uintptr_t final_gv = is_valid_ptr(gv_ptr) ? gv_ptr : gv_base;
+        uintptr_t final_gv = EntityList::is_valid_ptr(gv_ptr) ? gv_ptr : gv_base;
+        if (!EntityList::is_valid_ptr(final_gv)) return 0.f;
         return *reinterpret_cast<const float*>(final_gv + 0x30); // 0x30 = flCurTime
     }
     __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -49,20 +45,22 @@ static float get_cur_time() {
 
 static bool entity_designer_name(uintptr_t entity, char* out, size_t max_len)
 {
-    if (!is_valid_ptr(entity) || max_len == 0) return false;
+    if (!EntityList::is_valid_ptr(entity) || max_len == 0) return false;
     out[0] = 0;
 
     __try {
         uintptr_t ident = *reinterpret_cast<const uintptr_t*>(entity + g_offsets.CEntityInstance.m_pEntity);
-        if (!is_valid_ptr(ident)) return false;
+        if (!EntityList::is_valid_ptr(ident)) return false;
 
         uintptr_t str_ptr = *reinterpret_cast<const uintptr_t*>(ident + g_offsets.CEntityIdentity.m_designerName);
-        if (!is_valid_ptr(str_ptr)) return false;
+        if (!EntityList::is_valid_ptr(str_ptr)) return false;
 
         const char* src = reinterpret_cast<const char*>(str_ptr);
         size_t i = 0;
         for (; i < max_len - 1 && src[i] != '\0'; i++) {
-            out[i] = src[i];
+            char c = src[i];
+            if ((unsigned char)c < 0x20 || (unsigned char)c > 0x7E) break;
+            out[i] = c;
         }
         out[i] = '\0';
         return (i > 0);
@@ -83,21 +81,21 @@ static PlantedC4State read_planted_c4()
     __try {
         if (g_offsets.client.dwPlantedC4) {
             uintptr_t raw = *reinterpret_cast<const uintptr_t*>(client + g_offsets.client.dwPlantedC4);
-            if (is_valid_ptr(raw)) {
+            if (EntityList::is_valid_ptr(raw)) {
                 planted_c4_ent = raw;
             }
         }
 
         if (!planted_c4_ent && g_offsets.client.dwEntityList) {
             uintptr_t entity_list = *reinterpret_cast<const uintptr_t*>(client + g_offsets.client.dwEntityList);
-            if (is_valid_ptr(entity_list)) {
+            if (EntityList::is_valid_ptr(entity_list)) {
                 for (uint32_t pg = 0; pg < 8; pg++) {
                     uintptr_t page_addr = EntityList::get_page(entity_list, pg * 512);
-                    if (!is_valid_ptr(page_addr)) continue;
+                    if (!EntityList::is_valid_ptr(page_addr)) continue;
 
                     for (size_t slot = 1; slot < 512; slot++) {
                         uintptr_t ent = *reinterpret_cast<const uintptr_t*>(page_addr + EntityList::ENTRY_STRIDE * slot);
-                        if (!is_valid_ptr(ent)) continue;
+                        if (!EntityList::is_valid_ptr(ent)) continue;
 
                         char name[33]{};
                         if (!entity_designer_name(ent, name, sizeof(name))) continue;
@@ -112,7 +110,7 @@ static PlantedC4State read_planted_c4()
             }
         }
 
-        if (!is_valid_ptr(planted_c4_ent)) return state;
+        if (!EntityList::is_valid_ptr(planted_c4_ent)) return state;
 
         uint8_t ticking = 1;
         if (g_offsets.C4.m_bBombTicking) {
@@ -121,7 +119,7 @@ static PlantedC4State read_planted_c4()
         if (!ticking) return state;
 
         uintptr_t scene = *reinterpret_cast<const uintptr_t*>(planted_c4_ent + g_offsets.C_BaseEntity.m_pGameSceneNode);
-        if (is_valid_ptr(scene)) {
+        if (EntityList::is_valid_ptr(scene)) {
             state.world_pos = *reinterpret_cast<const Vec3*>(scene + g_offsets.CGameSceneNode.m_vecAbsOrigin);
         }
 
@@ -198,7 +196,7 @@ static void draw_bomb_timer(const PlantedC4State& c4)
     float bx = g_settings.bomb_x;
     float by = g_settings.bomb_y;
     if (bx < 0) { bx = 10.f; g_settings.bomb_x = bx; }
-    if (by < 0) { by = 200.f; g_settings.bomb_y = by; }
+    if (by < 0) { by = 260.f; g_settings.bomb_y = by; }
 
     ImGui::SetNextWindowPos({ g_settings.bomb_x, g_settings.bomb_y }, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints({ window_w, header_h + 10.f }, { window_w, 600.f });
@@ -333,10 +331,10 @@ inline DroppedC4State read_dropped_c4(bool bomb_planted) {
 
     __try {
         uintptr_t raw_ptr = *reinterpret_cast<const uintptr_t*>(client + g_offsets.client.dwWeaponC4);
-        if (!is_valid_ptr(raw_ptr)) return state;
+        if (!EntityList::is_valid_ptr(raw_ptr)) return state;
 
         uintptr_t c4_entity = *reinterpret_cast<const uintptr_t*>(raw_ptr);
-        if (!is_valid_ptr(c4_entity)) return state;
+        if (!EntityList::is_valid_ptr(c4_entity)) return state;
 
         uint32_t owner = *reinterpret_cast<const uint32_t*>(c4_entity + g_offsets.C_BaseEntity.m_hOwnerEntity);
         if (owner != 0 && owner != 0xFFFFFFFF) {
@@ -344,10 +342,9 @@ inline DroppedC4State read_dropped_c4(bool bomb_planted) {
         }
 
         uintptr_t scene = *reinterpret_cast<const uintptr_t*>(c4_entity + g_offsets.C_BaseEntity.m_pGameSceneNode);
-        if (!is_valid_ptr(scene)) return state;
+        if (!EntityList::is_valid_ptr(scene)) return state;
 
         uintptr_t parent = *reinterpret_cast<const uintptr_t*>(scene + 0x38);
-
         Vec3 pos = *reinterpret_cast<const Vec3*>(scene + g_offsets.CGameSceneNode.m_vecAbsOrigin);
 
         if (parent == 0 && (pos.x != 0.f || pos.y != 0.f || pos.z != 0.f)) {

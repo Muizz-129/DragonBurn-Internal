@@ -13,66 +13,70 @@
 #include "../helpers/icons.h"
 #include "../theme/colors.h"
 
+template<typename T>
+inline T spec_read(uintptr_t addr) {
+    if (!EntityList::is_valid_ptr(addr)) return T{};
+    __try {
+        return *reinterpret_cast<const T*>(addr);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        return T{};
+    }
+}
+
 class SpectatorList {
 public:
     std::vector<std::string> spectators;
 
     void update(uintptr_t entity_list, uintptr_t local_pawn, uintptr_t local_controller) {
         spectators.clear();
-        if (!entity_list || !local_pawn) return;
+        if (!EntityList::is_valid_ptr(entity_list) || !EntityList::is_valid_ptr(local_pawn)) return;
 
         uint32_t local_handle_player = 0;
         uint32_t local_handle_pawn = 0;
-        if (local_controller) {
-            local_handle_player = *reinterpret_cast<const uint32_t*>(
-                local_controller + g_offsets.CCSPlayerController.m_hPlayerPawn);
-            local_handle_pawn = *reinterpret_cast<const uint32_t*>(
-                local_controller + g_offsets.CCSPlayerController.m_hPawn);
+        if (EntityList::is_valid_ptr(local_controller)) {
+            local_handle_player = spec_read<uint32_t>(local_controller + g_offsets.CCSPlayerController.m_hPlayerPawn);
+            local_handle_pawn = spec_read<uint32_t>(local_controller + g_offsets.CCSPlayerController.m_hPawn);
         }
 
-        uintptr_t first_page = *reinterpret_cast<const uintptr_t*>(
-            entity_list + EntityList::PAGE_HEADER);
-        if (!first_page) return;
+        uintptr_t first_page = EntityList::get_page(entity_list, 0);
+        if (!EntityList::is_valid_ptr(first_page)) return;
 
         for (int i = 1; i < EntityList::MAX_PLAYERS; i++) {
-            uintptr_t controller = *reinterpret_cast<const uintptr_t*>(
-                first_page + EntityList::ENTRY_STRIDE * (i & EntityList::INDEX_MASK));
-            if (!controller || controller == local_controller) continue;
+            uintptr_t controller_slot = first_page + EntityList::ENTRY_STRIDE * (i & EntityList::INDEX_MASK);
+            uintptr_t controller = spec_read<uintptr_t>(controller_slot);
+            if (!EntityList::is_valid_ptr(controller) || controller == local_controller) continue;
 
-            uint32_t player_pawn_h = *reinterpret_cast<const uint32_t*>(
-                controller + g_offsets.CCSPlayerController.m_hPlayerPawn);
+            uint32_t player_pawn_h = spec_read<uint32_t>(controller + g_offsets.CCSPlayerController.m_hPlayerPawn);
 
             uintptr_t player_pawn = 0;
-            if (player_pawn_h && player_pawn_h != 0xFFFFFFFF) {
+            if (player_pawn_h && player_pawn_h != 0xFFFFFFFF && (player_pawn_h & 0xFFFFFF) != 0xFFFFFF) {
                 player_pawn = EntityList::resolve_handle(entity_list, player_pawn_h);
-                if (player_pawn) {
-                    int health = *reinterpret_cast<const int*>(player_pawn + g_offsets.C_BaseEntity.m_iHealth);
+                if (EntityList::is_valid_ptr(player_pawn)) {
+                    int health = spec_read<int>(player_pawn + g_offsets.C_BaseEntity.m_iHealth);
                     if (health > 0) {
                         continue;
                     }
                 }
             }
 
-            uint32_t observer_pawn_h = *reinterpret_cast<const uint32_t*>(
-                controller + g_offsets.CCSPlayerController.m_hObserverPawn);
+            uint32_t observer_pawn_h = spec_read<uint32_t>(controller + g_offsets.CCSPlayerController.m_hObserverPawn);
 
             uintptr_t obs_pawn = 0;
-            if (observer_pawn_h && observer_pawn_h != 0xFFFFFFFF) {
+            if (observer_pawn_h && observer_pawn_h != 0xFFFFFFFF && (observer_pawn_h & 0xFFFFFF) != 0xFFFFFF) {
                 obs_pawn = EntityList::resolve_handle(entity_list, observer_pawn_h);
             }
-            if (!obs_pawn && player_pawn) {
+            if (!EntityList::is_valid_ptr(obs_pawn) && EntityList::is_valid_ptr(player_pawn)) {
                 obs_pawn = player_pawn;
             }
 
-            if (!obs_pawn || obs_pawn == local_pawn) continue;
+            if (!EntityList::is_valid_ptr(obs_pawn) || obs_pawn == local_pawn) continue;
 
-            uintptr_t obs_svc = *reinterpret_cast<const uintptr_t*>(
-                obs_pawn + g_offsets.C_BasePlayerPawn.m_pObserverServices);
-            if (!obs_svc) continue;
+            uintptr_t obs_svc = spec_read<uintptr_t>(obs_pawn + g_offsets.C_BasePlayerPawn.m_pObserverServices);
+            if (!EntityList::is_valid_ptr(obs_svc)) continue;
 
-            uint32_t obs_target_h = *reinterpret_cast<const uint32_t*>(
-                obs_svc + g_offsets.CPlayer_ObserverServices.m_hObserverTarget);
-            if (!obs_target_h || obs_target_h == 0xFFFFFFFF) continue;
+            uint32_t obs_target_h = spec_read<uint32_t>(obs_svc + g_offsets.CPlayer_ObserverServices.m_hObserverTarget);
+            if (!obs_target_h || obs_target_h == 0xFFFFFFFF || (obs_target_h & 0xFFFFFF) == 0xFFFFFF) continue;
 
             uintptr_t resolved_target_pawn = EntityList::resolve_handle(entity_list, obs_target_h);
 
@@ -105,7 +109,7 @@ public:
         float sy = g_settings.spec_y;
         if (sx <= 0.0f || sy <= 0.0f) {
             sx = (float)screen_w - window_w - 20.0f;
-            sy = 60.0f;
+            sy = 160.0f;
             g_settings.spec_x = sx;
             g_settings.spec_y = sy;
         }
@@ -134,7 +138,6 @@ public:
             ImVec2 w_size = ImGui::GetWindowSize();
             ImVec2 w_max = w_origin + w_size;
 
-            // Garisan atas (Accent glow bar)
             dl->AddRectFilled(w_origin, { w_max.x, w_origin.y + 2.f }, IM_COL32(0, 220, 200, 160));
             dl->AddRectFilled({ w_origin.x, w_origin.y + 2.f }, { w_max.x, w_origin.y + 4.f }, IM_COL32(0, 220, 200, 60));
 

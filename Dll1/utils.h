@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include <ShlObj.h>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -9,21 +10,25 @@
 #pragma comment(lib, "winmm.lib")
 
 inline std::string get_dll_directory() {
-    char path[MAX_PATH] = { 0 };
-    HMODULE hm = NULL;
+    PWSTR pPath = nullptr;
+    std::string dir_path = "";
 
-    
-    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        (LPCSTR)&get_dll_directory, &hm)) {
-        GetModuleFileNameA(hm, path, sizeof(path));
-        std::string s(path);
-        size_t pos = s.find_last_of("\\/");
-        if (pos != std::string::npos) {
-            return s.substr(0, pos + 1);
-        }
+    // Get the Windows user's 'My Documents' folder.
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, NULL, &pPath))) {
+        std::wstring ws_dir(pPath);
+        ws_dir += L"\\DragonBurn"; // Create sub-folder Documents/DragonBurn/
+
+        // 2. Create a folder if it does not already exist (Use the Windows API directly)
+        CreateDirectoryW(ws_dir.c_str(), NULL);
+
+        char buffer[MAX_PATH];
+        WideCharToMultiByte(CP_UTF8, 0, ws_dir.c_str(), -1, buffer, MAX_PATH, NULL, NULL);
+
+        dir_path = std::string(buffer) + "\\";
+        CoTaskMemFree(pPath);
     }
-    return "";
+
+    return dir_path;
 }
 
 inline void limit_frame(std::chrono::high_resolution_clock::time_point frame_start,

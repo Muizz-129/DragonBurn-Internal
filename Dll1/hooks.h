@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdio>
 #include "render.h"
+#include "xorstr.h"
 
 namespace Hooks {
     typedef HRESULT(NTAPI* Present_t)(IDXGISwapChain*, UINT, UINT);
@@ -35,9 +36,7 @@ namespace Hooks {
         if (fp) fclose(fp);
         FreeConsole();
 
-        if (hModule) {
-            FreeLibraryAndExitThread(hModule, 0);
-        }
+        ExitThread(0);
     }
 
     inline uintptr_t scan_steam_pattern(HMODULE hModule, const char* signature) {
@@ -83,6 +82,8 @@ namespace Hooks {
     }
 
     inline HRESULT NTAPI hkResizeBuffers(IDXGISwapChain* sc, UINT bc, UINT w, UINT h, DXGI_FORMAT fmt, UINT flags) {
+        if (!oResizeBuffers) return E_FAIL;
+
         if (Render::g_pPinnedSwapChain && sc == Render::g_pPinnedSwapChain) {
             Render::cleanup_render_target();
         }
@@ -96,6 +97,10 @@ namespace Hooks {
     }
 
     inline HRESULT NTAPI hkPresent(IDXGISwapChain* sc, UINT sync, UINT flags) {
+        if (!sc || !oPresent) {
+            return (oPresent) ? oPresent(sc, sync, flags) : E_FAIL;
+        }
+
         if (!Render::g_Init) {
             if (++Render::g_SkipCount >= 120) {
                 Render::init_imgui(sc);
@@ -107,7 +112,9 @@ namespace Hooks {
         if (Render::g_pPinnedSwapChain && sc != Render::g_pPinnedSwapChain)
             return oPresent(sc, sync, flags);
 
-        Render::render_frame(sc);
+        if (Render::g_pDevice && Render::g_pRenderTargetView) {
+            Render::render_frame(sc);
+        }
 
         return oPresent(sc, sync, flags);
     }
@@ -117,12 +124,12 @@ namespace Hooks {
 
         HMODULE hOverlay = nullptr;
         for (int i = 0; i < 100 && !hOverlay; i++) {
-            hOverlay = GetModuleHandleA("GameOverlayRenderer64.dll");
+            hOverlay = GetModuleHandleA(_xor_("GameOverlayRenderer64.dll").c_str());
             if (!hOverlay) Sleep(100);
         }
 
         if (!hOverlay) {
-            show_error_console("Failed to locate GameOverlayRenderer64.dll. Ensure Steam overlay is enabled.", hModule);
+            show_error_console(_xor_("Failed to locate GameOverlayRenderer64.dll. Ensure Steam overlay is enabled.").c_str(), hModule);
             return 0;
         }
 
@@ -181,6 +188,8 @@ namespace Hooks {
                 *g_pResizePtr = oResizeBuffers;
                 VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, oldProt, &oldProt);
             }
+
+            Sleep(100);
 
             g_pPresentPtr = nullptr;
             g_pResizePtr = nullptr;

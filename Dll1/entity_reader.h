@@ -13,7 +13,7 @@
 
 template<typename T>
 inline T read_mem(uintptr_t addr) {
-    if (!addr || addr < 0x10000 || addr > 0x7FFFFFFFFFFF) return T{};
+    if (!EntityList::is_valid_ptr(addr)) return T{};
     __try {
         return *reinterpret_cast<const T*>(addr);
     }
@@ -23,7 +23,7 @@ inline T read_mem(uintptr_t addr) {
 }
 
 inline bool read_raw_mem(uintptr_t addr, void* dest, size_t size) {
-    if (!addr || !dest || size == 0 || addr < 0x10000 || addr > 0x7FFFFFFFFFFF) return false;
+    if (!EntityList::is_valid_ptr(addr) || !dest || size == 0) return false;
     __try {
         memcpy(dest, reinterpret_cast<const void*>(addr), size);
         return true;
@@ -261,89 +261,58 @@ private:
 
     void read_weapon(uintptr_t pawn, uintptr_t entity_list, char* out_name, size_t max_len, uint16_t& out_def_index) {
         out_name[0] = 0;
-        out_def_index = 1;
-        if (!pawn || !entity_list) return;
+        out_def_index = 0;
+        if (!EntityList::is_valid_ptr(pawn) || !EntityList::is_valid_ptr(entity_list)) return;
 
         uintptr_t weapon_services = read_mem<uintptr_t>(pawn + g_offsets.C_CSPlayerPawnBase.m_pWeaponServices);
-        if (!weapon_services) return;
+        if (!EntityList::is_valid_ptr(weapon_services)) return;
 
         uint32_t handle = read_mem<uint32_t>(weapon_services + g_offsets.CPlayer_WeaponServices.m_hActiveWeapon);
-        if (!handle || handle == 0xFFFFFFFF) return;
+        if (!handle || handle == 0xFFFFFFFF || (handle & 0xFFFFFF) == 0xFFFFFF) return;
 
-        uint32_t ent_idx = handle & 0x7FFF;
-        uintptr_t list_entry = read_mem<uintptr_t>(entity_list + 0x8 * (ent_idx >> 9) + 16);
-        if (!list_entry) return;
+        uintptr_t weapon = EntityList::resolve_handle(entity_list, handle);
+        if (!EntityList::is_valid_ptr(weapon)) return;
 
-        uintptr_t slot_addr = list_entry + EntityList::ENTRY_STRIDE * (ent_idx & 0x1FF);
-        uintptr_t entity = read_mem<uintptr_t>(slot_addr);
-
-        char designer_name[64] = { 0 };
-
-        uintptr_t designer_ptr = read_mem<uintptr_t>(slot_addr + 0x20);
-        if (designer_ptr) {
-            read_raw_mem(designer_ptr, designer_name, sizeof(designer_name));
-        }
-        if (designer_name[0] == '\0' && entity) {
-            uintptr_t identity = read_mem<uintptr_t>(entity + 0x10);
-            if (identity) {
-                designer_ptr = read_mem<uintptr_t>(identity + 0x20);
-                if (designer_ptr) {
-                    read_raw_mem(designer_ptr, designer_name, sizeof(designer_name));
+        // Read designerName safely (character by character)
+        char dname[64] = { 0 };
+        uintptr_t ident = read_mem<uintptr_t>(weapon + g_offsets.CEntityInstance.m_pEntity);
+        if (EntityList::is_valid_ptr(ident)) {
+            uintptr_t str_ptr = read_mem<uintptr_t>(ident + g_offsets.CEntityIdentity.m_designerName);
+            if (EntityList::is_valid_ptr(str_ptr)) {
+                for (size_t i = 0; i < sizeof(dname) - 1; ++i) {
+                    char c = read_mem<char>(str_ptr + i);
+                    if (c == '\0' || (unsigned char)c < 0x20 || (unsigned char)c > 0x7E) break;
+                    dname[i] = c;
                 }
             }
         }
 
-        if (designer_name[0] != '\0') {
-            const char* s = designer_name;
-            if (strstr(s, "ak47"))             out_def_index = 7;
-            else if (strstr(s, "deagle"))      out_def_index = 1;
-            else if (strstr(s, "awp"))         out_def_index = 9;
-            else if (strstr(s, "m4a1_silencer")) out_def_index = 60;
-            else if (strstr(s, "m4a1"))        out_def_index = 16;
-            else if (strstr(s, "usp"))         out_def_index = 61;
-            else if (strstr(s, "glock"))       out_def_index = 4;
-            else if (strstr(s, "ssg08"))       out_def_index = 40;
-            else if (strstr(s, "galilar"))     out_def_index = 13;
-            else if (strstr(s, "famas"))       out_def_index = 10;
-            else if (strstr(s, "aug"))         out_def_index = 8;
-            else if (strstr(s, "sg556"))       out_def_index = 39;
-            else if (strstr(s, "mp9"))         out_def_index = 34;
-            else if (strstr(s, "mac10"))       out_def_index = 17;
-            else if (strstr(s, "mp7"))         out_def_index = 33;
-            else if (strstr(s, "mp5sd"))       out_def_index = 23;
-            else if (strstr(s, "ump45"))       out_def_index = 24;
-            else if (strstr(s, "p90"))         out_def_index = 19;
-            else if (strstr(s, "bizon"))       out_def_index = 26;
-            else if (strstr(s, "elite"))       out_def_index = 2;
-            else if (strstr(s, "fiveseven"))   out_def_index = 3;
-            else if (strstr(s, "hkp2000"))     out_def_index = 32;
-            else if (strstr(s, "p250"))        out_def_index = 36;
-            else if (strstr(s, "tec9"))        out_def_index = 30;
-            else if (strstr(s, "cz75a"))       out_def_index = 63;
-            else if (strstr(s, "revolver"))    out_def_index = 64;
-            else if (strstr(s, "nova"))        out_def_index = 35;
-            else if (strstr(s, "xm1014"))      out_def_index = 25;
-            else if (strstr(s, "sawedoff"))    out_def_index = 29;
-            else if (strstr(s, "mag7"))        out_def_index = 27;
-            else if (strstr(s, "m249"))        out_def_index = 14;
-            else if (strstr(s, "negev"))       out_def_index = 28;
-            else if (strstr(s, "g3sg1"))       out_def_index = 11;
-            else if (strstr(s, "scar20"))      out_def_index = 38;
-            else if (strstr(s, "flash"))       out_def_index = 43;
-            else if (strstr(s, "hegrenade"))   out_def_index = 44;
-            else if (strstr(s, "smoke"))       out_def_index = 45;
-            else if (strstr(s, "molotov"))     out_def_index = 46;
-            else if (strstr(s, "incgrenade"))  out_def_index = 48;
-            else if (strstr(s, "decoy"))       out_def_index = 47;
-            else if (strstr(s, "taser"))       out_def_index = 31;
-            else if (strstr(s, "knife"))       out_def_index = 42;
-            else                               out_def_index = 1;
+        if (dname[0] != 0) {
+            std::string s(dname);
+            if (s.find("smoke") != std::string::npos)          out_def_index = 45;
+            else if (s.find("molotov") != std::string::npos)    out_def_index = 46;
+            else if (s.find("incgrenade") != std::string::npos) out_def_index = 48;
+            else if (s.find("hegrenade") != std::string::npos)  out_def_index = 44;
+            else if (s.find("flashbang") != std::string::npos)  out_def_index = 43;
+            else if (s.find("decoy") != std::string::npos)      out_def_index = 47;
+            else if (s.find("c4") != std::string::npos)         out_def_index = 49;
+            else if (s.find("knife") != std::string::npos || s.find("bayonet") != std::string::npos) out_def_index = 42;
+            else out_def_index = 1; // Default to firearms
 
-            const WeaponInfo* info = lookup_weapon(out_def_index);
-            if (info)
-                snprintf(out_name, max_len, "%s", info->name);
-            else
-                snprintf(out_name, max_len, "%s", designer_name);
+            snprintf(out_name, max_len, "%s", dname);
+            return;
+        }
+
+        uint16_t id = read_mem<uint16_t>(
+            weapon + g_offsets.C_EconEntity.m_AttributeManager
+            + g_offsets.C_AttributeContainer.m_Item
+            + g_offsets.C_EconItemView.m_iItemDefinitionIndex
+        );
+
+        if (id > 0) {
+            out_def_index = id;
+            const WeaponInfo* info = lookup_weapon(id);
+            if (info) snprintf(out_name, max_len, "%s", info->name);
         }
     }
 

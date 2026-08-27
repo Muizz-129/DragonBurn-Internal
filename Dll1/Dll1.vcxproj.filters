@@ -213,6 +213,9 @@
     <ClInclude Include="theme_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="xorstr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

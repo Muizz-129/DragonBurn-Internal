@@ -29,6 +29,8 @@ public:
         write(f, "esp_opacity_drop_start", g_settings.esp_opacity_drop_start);
         write(f, "esp_opacity_drop_end", g_settings.esp_opacity_drop_end);
         write(f, "esp_opacity_drop_min", g_settings.esp_opacity_drop_min);
+        write(f, "c4_esp_enabled", g_settings.c4_esp_enabled);
+        write(f, "show_bomb_timer", g_settings.show_bomb_timer);
 
         f << "\n[Font]\n";
         write(f, "esp_font_index", g_settings.esp_font_index);
@@ -218,6 +220,8 @@ public:
         read(kv, "chams_enabled", g_settings.chams_enabled);
         read(kv, "chams_style", g_settings.chams_style);
         read(kv, "esp_font_index", g_settings.esp_font_index);
+        read(kv, "c4_esp_enabled", g_settings.c4_esp_enabled);
+        read(kv, "show_bomb_timer", g_settings.show_bomb_timer);
 
         read(kv, "name_position", g_settings.name_position);
         read(kv, "name_offset_x", g_settings.name_offset_x);

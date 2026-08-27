@@ -25,9 +25,9 @@ namespace Render {
     inline ID3D11DeviceContext* g_pContext = nullptr;
     inline ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
     inline IDXGISwapChain* g_pPinnedSwapChain = nullptr;
-    inline bool                    g_Init = false;
-    inline int                     g_SkipCount = 0;
-    inline EntityReader            g_entity_reader;
+    inline int g_SkipCount = 0;
+    inline bool g_Init = false;
+    inline EntityReader g_entity_reader;
 
     inline void create_render_target(IDXGISwapChain* pSwapChain) {
         ID3D11Texture2D* pBackBuffer = nullptr;
@@ -47,8 +47,7 @@ namespace Render {
     }
 
     inline void init_imgui(IDXGISwapChain* pSwapChain) {
-        if (FAILED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_pDevice)))
-            return;
+        if (FAILED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_pDevice))) return;
         g_pDevice->GetImmediateContext(&g_pContext);
 
         DXGI_SWAP_CHAIN_DESC desc;
@@ -65,7 +64,6 @@ namespace Render {
 
         fonts::init();
         g_weapon_icons.init(g_pDevice);
-
         menu_textures_init(g_pDevice);
 
         ImGui_ImplWin32_Init(desc.OutputWindow);
@@ -75,6 +73,7 @@ namespace Render {
         Config::load(dll_dir + "config.ini");
         g_grenades.init(dll_dir + "grenades.json");
 
+        start_aimbot_thread();
         g_Init = true;
     }
 
@@ -108,115 +107,121 @@ namespace Render {
         }
 
         io.MouseDrawCursor = g_settings.menu_open;
-
         ImGui::NewFrame();
         ImDrawList* draw = ImGui::GetBackgroundDrawList();
 
-        FrameState state = g_entity_reader.read_frame(screen_w, screen_h);
+        uintptr_t client_base = Offsets::get_client_base();
+        uintptr_t local_controller = client_base ? read_mem<uintptr_t>(client_base + g_offsets.client.dwLocalPlayerController) : 0;
+        uintptr_t entity_list = client_base ? read_mem<uintptr_t>(client_base + g_offsets.client.dwEntityList) : 0;
 
-        AimbotFrame ab_frame{};
-        ab_frame.local_pawn = state.local.pawn;
-        ab_frame.local_team = state.local.team;
-        ab_frame.local_player_index = state.local_player_index;
-        ab_frame.screen_w = screen_w;
-        ab_frame.screen_h = screen_h;
-        ab_frame.camera_valid = state.local.camera.valid;
-        ab_frame.camera_fov = state.local.camera.fov;
-        ab_frame.eye_origin = state.local.camera.origin;
-        ab_frame.view_angles = state.local.camera.angles;
-        ab_frame.is_scoped = state.local.is_scoped;
-        ab_frame.local_weapon_def_index = state.local_weapon_def_index;
+        bool is_in_game = (client_base != 0 && local_controller != 0 && entity_list != 0);
 
-        for (int i = 0; i < 64; i++) {
-            if (!state.players[i].valid) continue;
-            ab_frame.targets[i].valid = true;
-            ab_frame.targets[i].health = state.players[i].health;
-            ab_frame.targets[i].team = state.players[i].team;
-            ab_frame.targets[i].bSpottedByMask = state.players[i].bSpottedByMask;
-            ab_frame.targets[i].head_pos = state.players[i].head_world;
-            ab_frame.targets[i].neck_pos = state.players[i].neck_world;
-            ab_frame.targets[i].chest_pos = state.players[i].chest_world;
-            ab_frame.targets[i].pelvis_pos = state.players[i].pelvis_world;
-        }
-        g_aimbot_data.publish(ab_frame);
+        if (is_in_game) {
+            FrameState state = g_entity_reader.read_frame(screen_w, screen_h);
 
-        if (g_settings.master_switch) {
-
-            g_projectile_trails.set_view_matrix(state.view_matrix);
-            g_projectile_trails.update_and_draw(draw, state.entity_list, screen_w, screen_h);
+            // Publish data for the Aimbot thread
+            AimbotFrame ab_frame{};
+            ab_frame.local_pawn = state.local.pawn;
+            ab_frame.local_team = state.local.team;
+            ab_frame.local_player_index = state.local_player_index;
+            ab_frame.screen_w = screen_w;
+            ab_frame.screen_h = screen_h;
+            ab_frame.camera_valid = state.local.camera.valid;
+            ab_frame.camera_fov = state.local.camera.fov;
+            ab_frame.eye_origin = state.local.camera.origin;
+            ab_frame.view_angles = state.local.camera.angles;
+            ab_frame.is_scoped = state.local.is_scoped;
+            ab_frame.local_weapon_def_index = state.local_weapon_def_index;
 
             for (int i = 0; i < 64; i++) {
-                auto& p = state.players[i];
-                if (!p.valid) continue;
+                if (!state.players[i].valid) continue;
+                ab_frame.targets[i].valid = true;
+                ab_frame.targets[i].health = state.players[i].health;
+                ab_frame.targets[i].team = state.players[i].team;
+                ab_frame.targets[i].bSpottedByMask = state.players[i].bSpottedByMask;
+                ab_frame.targets[i].head_pos = (state.players[i].head_world.length_sqr() > 1.0f) ? state.players[i].head_world : state.players[i].bones_world[6];
+                ab_frame.targets[i].neck_pos = (state.players[i].neck_world.length_sqr() > 1.0f) ? state.players[i].neck_world : state.players[i].bones_world[5];
+                ab_frame.targets[i].chest_pos = (state.players[i].chest_world.length_sqr() > 1.0f) ? state.players[i].chest_world : state.players[i].bones_world[4];
+                ab_frame.targets[i].pelvis_pos = (state.players[i].pelvis_world.length_sqr() > 1.0f) ? state.players[i].pelvis_world : state.players[i].bones_world[0];
+            }
+            g_aimbot_data.publish(ab_frame);
 
-                for (int b = 0; b < MAX_BONE; b++) {
-                    p.visible[b] = w2s_depth(p.bones_world[b], state.view_matrix, screen_w, screen_h, p.screens[b], p.depths[b]);
+            if (g_settings.master_switch) {
+                // Projectile Trails
+                g_projectile_trails.set_view_matrix(state.view_matrix);
+                g_projectile_trails.update_and_draw(draw, state.entity_list, screen_w, screen_h);
+
+                // Player ESP
+                for (int i = 0; i < 64; i++) {
+                    auto& p = state.players[i];
+                    if (!p.valid) continue;
+                    for (int b = 0; b < MAX_BONE; b++) {
+                        p.visible[b] = w2s_depth(p.bones_world[b], state.view_matrix, screen_w, screen_h, p.screens[b], p.depths[b]);
+                    }
+                    g_esp.draw_player(draw, p, state.local.team, screen_w, screen_h, i, state.local.is_scoped);
                 }
-                g_esp.draw_player(draw, p, state.local.team, screen_w, screen_h, i, state.local.is_scoped);
-            }
 
-            // Bomb & Timer
-            PlantedC4State c4 = read_planted_c4();
-            draw_c4_esp(draw, c4, screen_w, screen_h, state.view_matrix);
-            draw_bomb_timer(c4);
+                // C4 & Bomb Timer
+                PlantedC4State c4 = read_planted_c4();
+                if (c4.valid) {
+                    draw_c4_esp(draw, c4, screen_w, screen_h, state.view_matrix);
+                    draw_bomb_timer(c4);
+                }
 
-            DroppedC4State dropped_c4 = read_dropped_c4(c4.valid);
-            if (dropped_c4.valid) {
-                draw_dropped_c4_esp(draw, dropped_c4, screen_w, screen_h, state.view_matrix);
-            }
+                DroppedC4State dropped_c4 = read_dropped_c4(c4.valid);
+                if (dropped_c4.valid) {
+                    draw_dropped_c4_esp(draw, dropped_c4, screen_w, screen_h, state.view_matrix);
+                }
 
-            // Spectators List
-            g_spectators.update(state.entity_list, state.local.pawn, state.local.controller);
-            g_spectators.draw(screen_w);
+                // Spectator List
+                if (state.local.pawn) {
+                    g_spectators.update(state.entity_list, state.local.pawn, state.local.controller);
+                    g_spectators.draw(screen_w);
+                }
 
-            // Crosshair
-            if (g_settings.crosshair_enabled) {
-                Crosshair::Config cc{};
-                cc.enabled = g_settings.crosshair_enabled;
-                cc.shape = g_settings.crosshair_shape;
-                cc.size = g_settings.crosshair_size;
-                cc.gap = g_settings.crosshair_gap;
-                cc.thickness = g_settings.crosshair_thickness;
-                cc.color = float4_to_col(g_settings.crosshair_color);
-                cc.outline = g_settings.crosshair_outline;
-                cc.outline_thickness = g_settings.crosshair_outline_thickness;
-                cc.outline_color = float4_to_col(g_settings.crosshair_outline_color);
-                cc.dot = g_settings.crosshair_dot;
-                cc.dot_size = g_settings.crosshair_dot_size;
-                g_crosshair.draw(draw, screen_w, screen_h, cc);
-            }
+                // Crosshair
+                if (g_settings.crosshair_enabled) {
+                    Crosshair::Config cc{};
+                    cc.enabled = g_settings.crosshair_enabled;
+                    cc.shape = g_settings.crosshair_shape;
+                    cc.size = g_settings.crosshair_size;
+                    cc.gap = g_settings.crosshair_gap;
+                    cc.thickness = g_settings.crosshair_thickness;
+                    cc.color = float4_to_col(g_settings.crosshair_color);
+                    cc.outline = g_settings.crosshair_outline;
+                    cc.outline_thickness = g_settings.crosshair_outline_thickness;
+                    cc.outline_color = float4_to_col(g_settings.crosshair_outline_color);
+                    cc.dot = g_settings.crosshair_dot;
+                    cc.dot_size = g_settings.crosshair_dot_size;
+                    g_crosshair.draw(draw, screen_w, screen_h, cc);
+                }
 
-            // FOV Circle
-            if (g_settings.aimbot_enabled && g_settings.draw_aimbot_fov) {
-                float cam_fov = (state.local.camera.valid && state.local.camera.fov > 0.0f)
-                    ? state.local.camera.fov
-                    : 90.0f;
+                // FOV Circle
+                if (g_settings.aimbot_enabled && g_settings.draw_aimbot_fov && state.local.pawn) {
+                    float cam_fov = (state.local.camera.valid && state.local.camera.fov > 0.0f) ? state.local.camera.fov : 90.0f;
+                    float rad_aim = (g_settings.aimbot_fov * 0.5f) * (3.14159265f / 180.0f);
+                    float rad_cam = (cam_fov * 0.5f) * (3.14159265f / 180.0f);
+                    float fov_radius = (tanf(rad_aim) / tanf(rad_cam)) * (screen_w * 0.5f);
 
-                float rad_aim = (g_settings.aimbot_fov * 0.5f) * (3.14159265f / 180.0f);
-                float rad_cam = (cam_fov * 0.5f) * (3.14159265f / 180.0f);
-                float fov_radius = (tanf(rad_aim) / tanf(rad_cam)) * (screen_w * 0.5f);
+                    ImVec2 center = ImVec2((float)screen_w * 0.5f, (float)screen_h * 0.5f);
+                    draw->AddCircle(center, fov_radius, float4_to_col(g_settings.aimbot_fov_color), 64, 1.2f);
+                }
 
-                ImVec2 center = ImVec2((float)screen_w * 0.5f, (float)screen_h * 0.5f);
-                ImU32 fov_col = float4_to_col(g_settings.aimbot_fov_color);
-
-                draw->AddCircle(center, fov_radius, fov_col, 64, 1.2f);
-            }
-
-            // Grenade Helper
-            if (g_settings.grenade_helper_enabled) {
-                g_grenades.set_view_matrix(state.view_matrix);
+                // Grenade Helper
                 g_grenades.update_held_weapon(state.local_weapon_def_index);
-                g_grenades.update(state.local.x, state.local.y, state.local.z,
-                    state.local.camera.angles.x, state.local.camera.angles.y,
-                    state.map_name);
-                g_grenades.draw(draw, state.local.x, state.local.y, state.local.z, screen_w, screen_h);
+                if (g_settings.grenade_helper_enabled && state.local.pawn) {
+                    g_grenades.set_view_matrix(state.view_matrix);
+                    g_grenades.update(state.local.x, state.local.y, state.local.z,
+                        state.local.camera.angles.x, state.local.camera.angles.y,
+                        state.map_name);
+                    g_grenades.draw(draw, state.local.x, state.local.y, state.local.z, screen_w, screen_h);
+                }
             }
         }
 
         g_grenades.render_popups();
 
         static bool was_menu_open = false;
-
         if (g_settings.menu_open) {
             g_menu.render();
             was_menu_open = true;
