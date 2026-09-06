@@ -20,6 +20,7 @@
 #include "utils.h"
 #include "weapon_icons.h"
 #include "theme_manager.h"
+#include "bvh.h"
 
 #include "../theme/colors.h"
 #include "../theme/layout.h"
@@ -338,8 +339,36 @@ private:
             }
 
             os::put_switch("Team Check", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.aimbot_team_check);
+            os::put_switch("Visible Check", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.aimbot_visible_check);
             os::put_switch("Draw FOV Circle", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.draw_aimbot_fov,
                 true, "###fovc", g_settings.aimbot_fov_color);
+
+            // Status BVH Live
+            ImGui::Dummy({ 0.f, 4.f });
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            ImGui::TextColored(
+                g_bvh.valid() ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) : ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
+                "Map Mesh: %s (%zu Tris)",
+                g_bvh.valid() ? "Ready" : "Not Loaded",
+                g_bvh.count()
+            );
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            if (ImGui::Button("Reload Map Geometry", { 160.f, 22.f })) {
+                std::thread([]() {
+                    g_bvh.clear();
+                    g_bvh.parse();
+                    }).detach();
+            }
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[BVH Diagnostic]");
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            ImGui::Text("Status: %s (Step %d)", g_bvh_dbg.status, g_bvh_dbg.step);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            ImGui::Text("World: 0x%llX", g_bvh_dbg.world);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
+            ImGui::Text("Bodies: %d (Parsed: %d)", g_bvh_dbg.body_count, g_bvh_dbg.bodies_processed);
         }
 
         ImGui::NextColumn();

@@ -5,7 +5,7 @@
 struct Offsets {
     // client.dll Offsets
     struct {
-        uintptr_t dwEntityList               = 0x2571230;
+        uintptr_t dwEntityList               = 0x2571220;
         uintptr_t dwViewMatrix               = 0x23CB830;
         uintptr_t dwViewRender               = 0x23CB898;
         uintptr_t dwLocalPlayerPawn          = 0x23C6268;
@@ -24,7 +24,8 @@ struct Offsets {
     } C_BaseEntity;                          
                                              
     struct {                                 
-        uintptr_t m_vecAbsOrigin             = 0xC8; // VectorWS
+        uintptr_t  m_vecAbsOrigin            = 0xC8; // VectorWS
+        uintptr_t  m_bDormant                = 0x103; // bool
     } CGameSceneNode;                        
                                              
     struct {                                 

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <chrono>
+#include <thread>
 #include <algorithm>
 #include "types.h"
 #include "offsets.h"
@@ -140,6 +141,11 @@ public:
                     cached_map_scale = get_map_scale(map_name);
                     cached_map_ptr = current_map_ptr;
                     cached_map_name = map_name;
+                    std::thread([]() {
+                        Sleep(1500);
+                        g_bvh.clear();
+                        g_bvh.parse();
+                        }).detach();
                 }
             }
         }
@@ -273,7 +279,6 @@ private:
         uintptr_t weapon = EntityList::resolve_handle(entity_list, handle);
         if (!EntityList::is_valid_ptr(weapon)) return;
 
-        // Read designerName safely (character by character)
         char dname[64] = { 0 };
         uintptr_t ident = read_mem<uintptr_t>(weapon + g_offsets.CEntityInstance.m_pEntity);
         if (EntityList::is_valid_ptr(ident)) {
@@ -297,7 +302,7 @@ private:
             else if (s.find("decoy") != std::string::npos)      out_def_index = 47;
             else if (s.find("c4") != std::string::npos)         out_def_index = 49;
             else if (s.find("knife") != std::string::npos || s.find("bayonet") != std::string::npos) out_def_index = 42;
-            else out_def_index = 1; // Default to firearms
+            else out_def_index = 1;
 
             snprintf(out_name, max_len, "%s", dname);
             return;
@@ -330,14 +335,21 @@ private:
         if (!read_raw_mem(pawn, snap.buf, PawnSnapshot::SIZE)) return;
 
         int health = snap.get<int>(g_offsets.C_BaseEntity.m_iHealth);
-        if (health <= 0) return;
+        if (health <= 0 || health > 100) return;
 
         int team = snap.get<int>(g_offsets.C_BaseEntity.m_iTeamNum);
 
         uintptr_t scene_node = snap.get<uintptr_t>(g_offsets.C_BaseEntity.m_pGameSceneNode);
         if (!scene_node) return;
 
+        bool is_dormant = read_mem<bool>(scene_node + g_offsets.CGameSceneNode.m_bDormant);
         Vec3 origin = read_mem<Vec3>(scene_node + g_offsets.CGameSceneNode.m_vecAbsOrigin);
+
+        // Tapis pemain dormant atau entiti kosong/loading (0,0,0)
+        if (is_dormant || (origin.x == 0.0f && origin.y == 0.0f && origin.z == 0.0f)) {
+            state.players[i].valid = false;
+            return;
+        }
 
         uintptr_t bone_array = read_mem<uintptr_t>(scene_node + g_offsets.CSkeletonInstance.m_modelState + 0x80);
         if (!bone_array) return;
@@ -419,8 +431,5 @@ private:
 
         auto now = std::chrono::steady_clock::now();
         if (is_spotted_ingame) last_spotted_time[i] = now;
-
-        auto time_since_spotted = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_spotted_time[i]).count();
-        bool is_recently_spotted = (time_since_spotted < 1000);
     }
 };

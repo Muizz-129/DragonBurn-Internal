@@ -26,18 +26,29 @@ namespace bvh_mem {
 	template<typename T>
 	inline T read(uintptr_t addr) {
 		if (!addr) return T{};
-		return *reinterpret_cast<const T*>(addr);
+		__try {
+			return *reinterpret_cast<const T*>(addr);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			return T{};
+		}
 	}
 
 	inline bool read_raw(uintptr_t addr, void* dest, size_t size) {
-		if (!addr || !dest) return false;
-		memcpy(dest, reinterpret_cast<const void*>(addr), size);
-		return true;
+		if (!addr || !dest || size == 0) return false;
+		__try {
+			memcpy(dest, reinterpret_cast<const void*>(addr), size);
+			return true;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			return false;
+		}
 	}
 
 	inline uintptr_t resolve_rip(uintptr_t inst_addr, int32_t offset = 3, int32_t length = 7) {
 		if (!inst_addr) return 0;
-		int32_t rel = *reinterpret_cast<const int32_t*>(inst_addr + offset);
+		int32_t rel = 0;
+		if (!read_raw(inst_addr + offset, &rel, sizeof(rel))) return 0;
 		return inst_addr + length + rel;
 	}
 
@@ -130,8 +141,8 @@ class bvh
 public:
 	struct surface_info
 	{
-		float penetration{};
-		std::uint16_t surface_type{};
+		float penetration{ 1.0f };
+		std::uint16_t surface_type{ 0 };
 		std::uint8_t global_index{ 255 };
 	};
 
@@ -139,7 +150,7 @@ public:
 	{
 		float unk_00{};
 		float unk_04{};
-		float penetration_mod{};
+		float penetration_mod{ 1.0f };
 		float unk_0C{};
 		float unk_10{};
 		std::uint16_t surface_type{};
@@ -158,7 +169,7 @@ public:
 	struct trace_result
 	{
 		bool hit{};
-		float fraction{};
+		float fraction{ 1.0f };
 		float distance{};
 		Vec3 end_pos{};
 		Vec3 normal{};
@@ -301,13 +312,10 @@ static Vec3 transform_point(const mat3_t& rot, const float scale[3], const float
 
 static bool extract_mesh(std::uintptr_t bvh_ptr, std::uintptr_t vert_ptr, std::uintptr_t tri_ptr, std::uint32_t node_count, const mat3_t& rot, const float scale[3], const float pos[3], std::uintptr_t mat_arr_ptr, std::int32_t mat_count, const std::vector<bvh::global_surface_entry>& global_table, const bvh::surface_info& default_surface, std::vector<bvh::triangle>& out)
 {
-	if (!bvh_ptr || !vert_ptr || !tri_ptr || node_count == 0 || node_count > 0x1000000)
-	{
-		return false;
-	}
+	if (!bvh_ptr || !vert_ptr || !tri_ptr || node_count == 0 || node_count > 0x1000000) return false;
 
 	std::vector<std::uint8_t> bvh_buf(static_cast<std::size_t>(node_count) * k_inner_node_size);
-	bvh_mem::read_raw(bvh_ptr, bvh_buf.data(), bvh_buf.size());
+	if (!bvh_mem::read_raw(bvh_ptr, bvh_buf.data(), bvh_buf.size())) return false;
 
 	std::uint32_t min_tri = UINT32_MAX, max_tri = 0;
 	std::vector<std::pair<std::uint32_t, std::uint32_t>> ranges;
@@ -362,7 +370,7 @@ static bool extract_mesh(std::uintptr_t bvh_ptr, std::uintptr_t vert_ptr, std::u
 	if (total_tris > 0x1000000) return false;
 
 	std::vector<std::int32_t> indices(total_tris * 3);
-	bvh_mem::read_raw(tri_ptr + static_cast<std::uintptr_t>(min_tri) * 12, indices.data(), total_tris * 12);
+	if (!bvh_mem::read_raw(tri_ptr + static_cast<std::uintptr_t>(min_tri) * 12, indices.data(), total_tris * 12)) return false;
 
 	std::int32_t max_vert{ 0 };
 	for (const auto idx : indices) {
@@ -373,7 +381,7 @@ static bool extract_mesh(std::uintptr_t bvh_ptr, std::uintptr_t vert_ptr, std::u
 
 	const auto vert_count = static_cast<std::uint32_t>(max_vert + 1);
 	std::vector<float> vertices(vert_count * 3);
-	bvh_mem::read_raw(vert_ptr, vertices.data(), static_cast<std::size_t>(vert_count) * 12);
+	if (!bvh_mem::read_raw(vert_ptr, vertices.data(), static_cast<std::size_t>(vert_count) * 12)) return false;
 
 	const bool has_materials = mat_arr_ptr > 0x10000 && mat_count > 0;
 	std::vector<std::uint8_t> materials;
@@ -430,7 +438,7 @@ static bool extract_hull(std::uintptr_t hull_data, float uniform_scale, const bv
 	if (!hull_data) return false;
 
 	std::uint8_t hd[0x100]{};
-	bvh_mem::read_raw(hull_data, hd, sizeof(hd));
+	if (!bvh_mem::read_raw(hull_data, hd, sizeof(hd))) return false;
 
 	const auto vert_count = *reinterpret_cast<const std::int32_t*>(hd + 0x88);
 	const auto vert_ptr = *reinterpret_cast<const std::uintptr_t*>(hd + 0x90);
@@ -443,13 +451,13 @@ static bool extract_hull(std::uintptr_t hull_data, float uniform_scale, const bv
 	if (!vert_ptr || !hedge_ptr || !face_ptr) return false;
 
 	std::vector<float> verts(vert_count * 3);
-	bvh_mem::read_raw(vert_ptr, verts.data(), static_cast<std::size_t>(vert_count) * 12);
+	if (!bvh_mem::read_raw(vert_ptr, verts.data(), static_cast<std::size_t>(vert_count) * 12)) return false;
 
 	std::vector<hedge_t> hedges(hedge_count);
-	bvh_mem::read_raw(hedge_ptr, hedges.data(), static_cast<std::size_t>(hedge_count) * 4);
+	if (!bvh_mem::read_raw(hedge_ptr, hedges.data(), static_cast<std::size_t>(hedge_count) * 4)) return false;
 
 	std::vector<std::uint8_t> faces(face_count);
-	bvh_mem::read_raw(face_ptr, faces.data(), face_count);
+	if (!bvh_mem::read_raw(face_ptr, faces.data(), face_count)) return false;
 
 	const auto before = out.size();
 
@@ -493,7 +501,7 @@ static void process_shape(std::uintptr_t shape_body, std::uintptr_t hull_vtable,
 {
 	const auto vtable = bvh_mem::read<std::uintptr_t>(shape_body);
 
-	if (vtable == hull_vtable)
+	if (hull_vtable && vtable == hull_vtable)
 	{
 		const auto hull_data = bvh_mem::read<std::uintptr_t>(shape_body + 0xb8);
 		if (hull_data > 0x10000 && hull_data < 0x7fffffffffff)
@@ -501,28 +509,26 @@ static void process_shape(std::uintptr_t shape_body, std::uintptr_t hull_vtable,
 			const auto scale = bvh_mem::read<float>(shape_body + 0xb0);
 			bvh::surface_info hull_surface{};
 			hull_surface.penetration = bvh_mem::read<float>(shape_body + 0x28);
+			if (hull_surface.penetration <= 0.0f) hull_surface.penetration = 1.0f;
 			extract_hull(hull_data, (scale > 0.0f && std::isfinite(scale)) ? scale : 1.0f, hull_surface, out);
 		}
 		return;
 	}
 
-	if (vtable != mesh_vtable) return;
+	if (mesh_vtable && vtable != mesh_vtable) return;
 
 	const auto mesh_data = bvh_mem::read<std::uintptr_t>(shape_body + 0xc0);
 	if (!mesh_data) return;
 
 	bvh::surface_info default_surface{};
 	default_surface.penetration = bvh_mem::read<float>(shape_body + 0x28);
-
-	const auto default_damage = bvh_mem::read<float>(shape_body + 0x2c);
-	if (default_damage < 0.0f) return;
+	if (default_surface.penetration <= 0.0f) default_surface.penetration = 1.0f;
 
 	std::uint8_t md[0xA0]{};
-	bvh_mem::read_raw(mesh_data, md, sizeof(md));
+	if (!bvh_mem::read_raw(mesh_data, md, sizeof(md))) return;
 
 	const auto mat_count = *reinterpret_cast<const std::int32_t*>(md + 0x90);
 	const auto mat_arr_ptr = *reinterpret_cast<const std::uintptr_t*>(md + 0x98);
-	const bool has_materials = mat_arr_ptr > 0x10000 && mat_count > 0;
 
 	float scale[3]{};
 	bvh_mem::read_raw(shape_body + 0xB0, scale, 12);
@@ -560,114 +566,116 @@ static void process_shape(std::uintptr_t shape_body, std::uintptr_t hull_vtable,
 	}
 }
 
+struct BVHDebugInfo {
+	int step = 0;
+	const char* status = "Idle";
+	uintptr_t client_base = 0;
+	uintptr_t vphys2_base = 0;
+	uintptr_t world_global = 0;
+	uintptr_t world = 0;
+	uintptr_t inner_world = 0;
+	uintptr_t body_array = 0;
+	int body_count = 0;
+	bool found_hull_vt = false;
+	bool found_mesh_vt = false;
+	int bodies_processed = 0;
+};
+inline BVHDebugInfo g_bvh_dbg;
+
 inline void bvh::parse()
 {
 	uintptr_t client_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("client.dll"));
-	uintptr_t vphysics_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("vphysics2.dll"));
-	if (!client_base || !vphysics_base) return;
+	uintptr_t vphysics2_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("vphysics2.dll"));
+	if (!client_base || !vphysics2_base) return;
 
-	const auto trace_against_entities_call = bvh_mem::find_pattern(client_base, "E8 ? ? ? ? C7 87 ? ? ? ? ? ? ? ? 48 8D 54 24 ? 48 8B CF");
-	if (!trace_against_entities_call) return;
-
+	// 1. Cari Pointer World Global
 	std::uintptr_t vphys2_world_global = 0;
-	for (int i = 5; i < 64; ++i) {
-		uint8_t buf[3];
-		bvh_mem::read_raw(trace_against_entities_call - i, buf, 3);
-		if (buf[0] == 0x48 && buf[1] == 0x8B && buf[2] == 0x0D) {
-			vphys2_world_global = bvh_mem::resolve_rip(trace_against_entities_call - i);
-			break;
+	const auto trace_call = bvh_mem::find_pattern(client_base, "E8 ? ? ? ? C7 87 ? ? ? ? ? ? ? ? 48 8D 54 24 ? 48 8B CF");
+	if (trace_call) {
+		for (int i = 5; i < 64; ++i) {
+			uint8_t buf[3];
+			if (bvh_mem::read_raw(trace_call - i, buf, 3)) {
+				if (buf[0] == 0x48 && buf[1] == 0x8B && buf[2] == 0x0D) {
+					vphys2_world_global = bvh_mem::resolve_rip(trace_call - i);
+					break;
+				}
+			}
 		}
+	}
+
+	if (!vphys2_world_global) {
+		const auto pat_b = bvh_mem::find_pattern(client_base, "48 8B 0D ? ? ? ? 48 8D 54 24 ? 48 8B CF E8");
+		if (pat_b) vphys2_world_global = bvh_mem::resolve_rip(pat_b);
 	}
 
 	if (!vphys2_world_global) return;
 	const auto vphys2_world = bvh_mem::read<std::uintptr_t>(vphys2_world_global);
 	if (!vphys2_world) return;
 
-	const auto get_surface_data_from_handle_fn = bvh_mem::find_pattern(client_base, "48 63 41 ? 48 8B 0D");
-	if (!get_surface_data_from_handle_fn) return;
+	// 2. Imbas Resolusi Dinamik Fizik CS2
+	uintptr_t inner_world = 0;
+	uintptr_t body_array = 0;
+	int body_count = 0;
 
-	const auto surface_manager = bvh_mem::read<std::uintptr_t>(bvh_mem::resolve_rip(get_surface_data_from_handle_fn + 4));
-	if (!surface_manager) return;
+	const uintptr_t inner_candidates[] = {
+		vphys2_world,
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x00),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x20),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x28),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x30),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x38),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x40),
+		bvh_mem::read<uintptr_t>(vphys2_world + 0x48)
+	};
 
-	std::vector<global_surface_entry> global_table;
-	{
-		const auto array_base = bvh_mem::read<std::uintptr_t>(surface_manager + 40);
-		if (array_base)
-		{
-			std::int32_t surface_count{ 0 };
-			for (const auto off : { 32, 36, 24, 28, 48 })
-			{
-				const auto candidate = bvh_mem::read<std::int32_t>(surface_manager + off);
-				if (candidate > 0)
-				{
-					surface_count = candidate;
+	for (uintptr_t candidate_inner : inner_candidates) {
+		if (!candidate_inner || candidate_inner < 0x10000) continue;
+
+		for (uintptr_t off_array : { 0x100, 0x108, 0x110, 0x118, 0x120, 0x128 }) {
+			uintptr_t candidate_array = bvh_mem::read<uintptr_t>(candidate_inner + off_array);
+			if (!candidate_array || candidate_array < 0x10000) continue;
+
+			for (uintptr_t off_count : { 0x268, 0x270, 0x278, 0x280 }) {
+				int count = bvh_mem::read<int>(candidate_array + off_count);
+				if (count > 0 && count < 100000) {
+					inner_world = candidate_inner;
+					body_array = candidate_array;
+					body_count = count;
 					break;
 				}
 			}
-
-			if (surface_count <= 0)
-			{
-				for (int i = 0; i < 1024; ++i)
-				{
-					global_surface_entry sd{};
-					bvh_mem::read_raw(array_base + static_cast<std::size_t>(i) * 32, &sd, sizeof(sd));
-					if (sd.penetration_mod == 0.0f && sd.surface_type == 0 && sd.unk_00 == 0.0f)
-					{
-						if (surface_count > 0 && i - surface_count > 8) break;
-						continue;
-					}
-					surface_count = i + 1;
-				}
-			}
-
-			if (surface_count)
-			{
-				global_table.resize(surface_count);
-				bvh_mem::read_raw(array_base, global_table.data(), static_cast<std::size_t>(surface_count) * sizeof(global_surface_entry));
-			}
+			if (body_count > 0) break;
 		}
+		if (body_count > 0) break;
 	}
 
-	const auto inner_world = bvh_mem::read<std::uintptr_t>(vphys2_world + 0x30);
-	if (!inner_world) return;
+	if (!inner_world || !body_array || body_count <= 0) return;
 
-	const auto body_array = bvh_mem::read<std::uintptr_t>(inner_world + 0x110);
-	if (!body_array) return;
-
-	const auto body_count = bvh_mem::read<std::int32_t>(body_array + 0x268);
-	if (!body_count) return;
-
-	const auto hull_vtable = bvh_mem::find_vtable(vphysics_base, "CRnHullShape");
-	const auto mesh_vtable = bvh_mem::find_vtable(vphysics_base, "CRnMeshShape");
-	if (!hull_vtable || !mesh_vtable) return;
+	const auto hull_vtable = bvh_mem::find_vtable(vphysics2_base, "CRnHullShape");
+	const auto mesh_vtable = bvh_mem::find_vtable(vphysics2_base, "CRnMeshShape");
 
 	std::vector<triangle> fresh;
 	fresh.reserve(262144);
 
-	for (std::int32_t body_idx = 0; body_idx < body_count; ++body_idx)
-	{
+	for (std::int32_t body_idx = 0; body_idx < body_count; ++body_idx) {
 		const auto body = body_array + static_cast<std::uintptr_t>(body_idx) * 88;
 		const auto bvh_root = bvh_mem::read<std::int32_t>(body);
 		const auto bvh_nodes_ptr = bvh_mem::read<std::uintptr_t>(body + 0x18);
 		if (!bvh_nodes_ptr) continue;
 
-		const auto femboys = bvh_mem::read<std::uint32_t>(body + 0x40);
-		if (femboys != 2) continue;
+		const auto body_flags = bvh_mem::read<std::uint32_t>(body + 0x40);
+		if (body_flags != 2 && !(body_flags & 2u)) continue;
 
-		if (bvh_root >= 0)
-		{
+		if (bvh_root >= 0) {
 			const auto count_a = static_cast<std::uint32_t>(bvh_root + 1);
 			const auto count_b = static_cast<std::uint32_t>(bvh_mem::read<std::int32_t>(body + 0x08));
 			const auto count_c = static_cast<std::uint32_t>(bvh_mem::read<std::int32_t>(body + 0x10));
 
-			std::uint32_t outer_node_count = count_a;
-			if (count_b > outer_node_count) outer_node_count = count_b;
-			if (count_c > outer_node_count) outer_node_count = count_c;
-
+			std::uint32_t outer_node_count = std::max({ count_a, count_b, count_c });
 			if (outer_node_count > 0x100000) continue;
 
 			std::vector<std::uint8_t> outer_buf(outer_node_count * k_outer_node_size);
-			bvh_mem::read_raw(bvh_nodes_ptr, outer_buf.data(), outer_buf.size());
+			if (!bvh_mem::read_raw(bvh_nodes_ptr, outer_buf.data(), outer_buf.size())) continue;
 
 			std::vector<std::uintptr_t> leaves;
 			leaves.reserve(256);
@@ -676,8 +684,7 @@ inline void bvh::parse()
 			outer_stack.reserve(128);
 			outer_stack.push_back(bvh_root);
 
-			while (!outer_stack.empty())
-			{
+			while (!outer_stack.empty()) {
 				const auto idx = outer_stack.back();
 				outer_stack.pop_back();
 				if (idx < 0 || static_cast<std::uint32_t>(idx) >= outer_node_count) continue;
@@ -685,13 +692,11 @@ inline void bvh::parse()
 				const auto node = outer_buf.data() + static_cast<std::uintptr_t>(idx) * k_outer_node_size;
 				const auto left = *reinterpret_cast<const std::int32_t*>(node + 12);
 
-				if (left == -1)
-				{
+				if (left == -1) {
 					const auto shape_ptr = *reinterpret_cast<const std::uintptr_t*>(node + 0x28);
 					if (shape_ptr) leaves.push_back(shape_ptr);
 				}
-				else
-				{
+				else {
 					const auto right = *reinterpret_cast<const std::int32_t*>(node + 28);
 					if (left >= 0) outer_stack.push_back(left);
 					if (right >= 0) outer_stack.push_back(right);
@@ -699,17 +704,15 @@ inline void bvh::parse()
 			}
 
 			std::unordered_set<std::uintptr_t> seen;
-			for (const auto shape : leaves)
-			{
+			for (const auto shape : leaves) {
 				if (seen.count(shape)) continue;
 				seen.insert(shape);
-				process_shape(shape, hull_vtable, mesh_vtable, global_table, fresh);
+				process_shape(shape, hull_vtable, mesh_vtable, {}, fresh);
 			}
 		}
-		else
-		{
+		else {
 			const auto shape = bvh_mem::read<std::uintptr_t>(body + 0x28);
-			if (shape) process_shape(shape, hull_vtable, mesh_vtable, global_table, fresh);
+			if (shape) process_shape(shape, hull_vtable, mesh_vtable, {}, fresh);
 		}
 	}
 
@@ -735,6 +738,7 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 {
 	trace_result result{};
 	result.end_pos = end;
+	result.fraction = 1.0f;
 
 	if (this->m_nodes.empty()) return result;
 

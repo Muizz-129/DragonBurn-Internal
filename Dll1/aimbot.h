@@ -59,30 +59,31 @@ private:
 
 inline AimbotSharedData g_aimbot_data;
 inline std::atomic<bool> g_aimbot_running{ false };
-
 inline float aim_error_x = 0.0f;
 inline float aim_error_y = 0.0f;
 
 static inline bool is_holding_non_gun(uint16_t w_id) {
     if (w_id == 0) return false;
-    if (w_id == 31 || w_id == 41 || w_id == 42 || w_id == 59 || w_id == 524) return true; // Knife/Zeus
-    if (w_id >= 43 && w_id <= 48) return true; // Grenades
-    if (w_id == 49) return true;               // C4
-    if (w_id >= 500 && w_id <= 530) return true; // Custom Knives
+    if (w_id == 41 || w_id == 42 || w_id == 59 || w_id == 524) return true; // Pisau
+    if (w_id >= 43 && w_id <= 48) return true;                              // Bom
+    if (w_id == 49) return true;                                            // C4
+    if (w_id >= 500 && w_id <= 530) return true;                            // Custom Knives
     return false;
 }
 
 static inline bool check_target_visible(const Vec3& eye_pos, const Vec3& target_pos, const AimbotTarget& target, int local_player_index) {
-    if (g_bvh.valid()) {
+    // 1. Utamakan semakan geometri BVH Raytrace jika peta dimuatkan
+    if (g_bvh.valid() && g_bvh.count() > 0) {
         const auto trace = g_bvh.trace_ray(eye_pos, target_pos);
         return (!trace.hit || trace.fraction > 0.97f);
     }
 
+    // 2. Fallback Radar: benarkan tembakan jika musuh aktif dalam bitmask
     if (local_player_index >= 0 && local_player_index < 64 && target.bSpottedByMask != 0) {
         return (target.bSpottedByMask & (1ULL << local_player_index)) != 0;
     }
 
-    return true;
+    return false;
 }
 
 static inline void aimbot_tick() {
@@ -115,17 +116,20 @@ static inline void aimbot_tick() {
     };
 
     int bone_idx = std::clamp(g_settings.aimbot_bone, 0, 3);
-    float best_fov = static_cast<float>(g_settings.aimbot_fov);
+    float best_fov = (g_settings.aimbot_fov > 0.1f) ? static_cast<float>(g_settings.aimbot_fov) : 5.0f;
     bool found = false;
     Vec3 best_aim_point{};
 
     for (int i = 1; i < 64; i++) {
         const auto& t = frame.targets[i];
-        if (!t.valid || t.health <= 0) continue;
-        if (t.team == frame.local_team && g_settings.aimbot_team_check) continue;
+        if (!t.valid || t.health <= 0 || t.health > 100) continue;
+
+        // Semakan Team Check
+        if (g_settings.aimbot_team_check && t.team == frame.local_team) continue;
 
         Vec3 bone_pos = t.*(bone_list[bone_idx]);
         if (bone_pos.length_sqr() < 1.0f) bone_pos = t.chest_pos;
+        if (bone_pos.length_sqr() < 1.0f) bone_pos = t.head_pos;
         if (bone_pos.length_sqr() < 1.0f) continue;
 
         AimAngles desired = calculate_angle(eye_pos, bone_pos);
@@ -187,9 +191,7 @@ static inline void aimbot_thread_func() {
 
     while (g_aimbot_running.load(std::memory_order_relaxed)) {
         auto tick_start = std::chrono::high_resolution_clock::now();
-
         aimbot_tick();
-
         auto tick_end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = tick_end - tick_start;
 
