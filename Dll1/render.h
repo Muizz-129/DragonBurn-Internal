@@ -70,10 +70,7 @@ namespace Render {
         ImGui_ImplDX11_Init(g_pDevice, g_pContext);
 
         std::string dll_dir = get_dll_directory();
-        Config::load(dll_dir + "config.ini");
         g_grenades.init(dll_dir + "grenades.json");
-
-        start_aimbot_thread();
         g_Init = true;
     }
 

@@ -95,23 +95,25 @@ class WeaponIcons {
 public:
     void init(ID3D11Device* device) {
         d3d_device = device;
-        if (!device) return;
+        if (!device) {
+            std::cout << "\033[38;2;255;70;70m   [ICONS] Error: D3D11 Device nullptr!\033[0m\n";
+            return;
+        }
 
         CoInitialize(nullptr);
 
-        char dll_path[MAX_PATH]{};
-        HMODULE hm = NULL;
-        GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)this, &hm);
-        GetModuleFileNameA(hm, dll_path, sizeof(dll_path));
-        std::string base_dir(dll_path);
-        size_t p = base_dir.find_last_of("\\/");
-        std::filesystem::path icon_dir = (p != std::string::npos) ? std::filesystem::path(base_dir.substr(0, p + 1)) / "icons" : std::filesystem::path("icons");
+        // Look for the icons folder next to the DLL / Config folder
+        std::filesystem::path icon_dir = std::filesystem::path(get_dll_directory()) / "icons";
+
+        std::cout << "\033[38;2;120;125;140m   [ICONS] Checking path: " << icon_dir.string() << "\033[0m\n";
 
         if (!std::filesystem::exists(icon_dir)) {
+            // Backup if the folder is placed in the cs2.exe working directory
             if (std::filesystem::exists("icons")) {
                 icon_dir = "icons";
             }
             else {
+                std::cout << "\033[38;2;255;70;70m   [ICONS] Folder 'icons' TIDAK DIJUMPAI! Letak folder 'icons' bersebelahan DLL.\033[0m\n";
                 return;
             }
         }
@@ -122,6 +124,7 @@ public:
             name_to_indices[key].push_back(ICON_FILENAME_MAP[i].def_index);
         }
 
+        int loaded_count = 0;
         for (auto& entry : std::filesystem::directory_iterator(icon_dir)) {
             if (!entry.is_regular_file()) continue;
             auto path = entry.path();
@@ -144,9 +147,11 @@ public:
                     it = name_to_indices.find("knife");
             }
 
-            if (it == name_to_indices.end()) continue;
+            if (it == name_to_indices.end()) {
+                std::cout << "\033[38;2;255;190;0m   [ICONS] Unmapped icon file: " << path.filename().string() << "\033[0m\n";
+                continue;
+            }
 
-            // Muat terus guna wchar_t path untuk elak ralat decoding karakter Windows
             LoadedIcon icon = load_image_texture_w(path.c_str());
             if (icon.srv) {
                 for (uint16_t def_idx : it->second) {
@@ -154,12 +159,13 @@ public:
                         if (&def_idx != &it->second[0])
                             icon.srv->AddRef();
                         icons[def_idx] = icon;
+                        loaded_count++;
                     }
                 }
             }
         }
 
-        // Kongsi ikon pisau asas
+        // Share basic knife icon
         auto knife_it = icons.find(42);
         if (knife_it != icons.end()) {
             for (int i = 0; i < ICON_MAP_SIZE; i++) {
@@ -171,6 +177,8 @@ public:
                 }
             }
         }
+
+        std::cout << "\033[38;2;0;255;128m   [ICONS] Success! Loaded " << loaded_count << " weapon icons into memory.\033[0m\n";
     }
 
     void shutdown() {
