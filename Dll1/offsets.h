@@ -24,7 +24,7 @@ struct Offsets {
     } C_BaseEntity;                          
                                              
     struct {                                 
-        uintptr_t  m_vecAbsOrigin            = 0xC8; // VectorWS
+        uintptr_t  m_vecAbsOrigin            = 0xC8;  // VectorWS
         uintptr_t  m_bDormant                = 0x103; // bool
     } CGameSceneNode;                        
                                              
@@ -43,6 +43,8 @@ struct Offsets {
 
     struct {
         uintptr_t m_pObserverServices        = 0x1220; // CPlayer_ObserverServices*
+        uintptr_t m_iShotsFired              = 0x1C8C; // int32
+        uintptr_t m_pAimPunchServices        = 0x14B8; // CCSPlayer_AimPunchServices*
     } C_BasePlayerPawn;
 
     struct {

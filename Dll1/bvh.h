@@ -719,9 +719,8 @@ inline void bvh::parse()
 	{
 		std::unique_lock lock(this->m_mutex);
 		this->m_triangles = std::move(fresh);
+		this->rebuild_accel();
 	}
-
-	this->rebuild_accel();
 }
 
 inline void bvh::clear()
@@ -736,11 +735,13 @@ inline void bvh::clear()
 
 inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std::int32_t exclude_tri) const
 {
+	std::shared_lock lock(this->m_mutex);
+
 	trace_result result{};
 	result.end_pos = end;
 	result.fraction = 1.0f;
 
-	if (this->m_nodes.empty()) return result;
+	if (this->m_nodes.empty() || this->m_triangles.empty()) return result;
 
 	const auto dx = end.x - start.x;
 	const auto dy = end.y - start.y;

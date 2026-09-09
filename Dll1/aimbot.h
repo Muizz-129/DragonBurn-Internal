@@ -67,12 +67,12 @@ static inline bool is_holding_non_gun(uint16_t w_id) {
     if (w_id == 41 || w_id == 42 || w_id == 59 || w_id == 524) return true; // Knife
     if (w_id >= 43 && w_id <= 48) return true;                              // Bom
     if (w_id == 49) return true;                                            // C4
-    if (w_id >= 500 && w_id <= 530) return true;                            
+    if (w_id >= 500 && w_id <= 530) return true;
     return false;
 }
 
 static inline bool check_target_visible(const Vec3& eye_pos, const Vec3& target_pos, const AimbotTarget& target, int local_player_index) {
-    // 1. Prioritize BVH Raytrace geometry checks if the map is loaded.
+    // 1. Prioritize BVH Raytrace geometry checks if the map is loaded
     if (g_bvh.valid() && g_bvh.count() > 0) {
         const auto trace = g_bvh.trace_ray(eye_pos, target_pos);
         return (!trace.hit || trace.fraction > 0.97f);
@@ -108,14 +108,6 @@ static inline void aimbot_tick() {
 
     AimAngles view_angles{ frame.view_angles.x, frame.view_angles.y };
 
-    static const Vec3 AimbotFrame::Target::* bone_list[] = {
-        &AimbotFrame::Target::head_pos,
-        &AimbotFrame::Target::neck_pos,
-        &AimbotFrame::Target::chest_pos,
-        &AimbotFrame::Target::pelvis_pos,
-    };
-
-    int bone_idx = std::clamp(g_settings.aimbot_bone, 0, 3);
     float best_fov = (g_settings.aimbot_fov > 0.1f) ? static_cast<float>(g_settings.aimbot_fov) : 5.0f;
     bool found = false;
     Vec3 best_aim_point{};
@@ -124,26 +116,36 @@ static inline void aimbot_tick() {
         const auto& t = frame.targets[i];
         if (!t.valid || t.health <= 0 || t.health > 100) continue;
 
-        // Team Check Review
+        // Team Check
         if (g_settings.aimbot_team_check && t.team == frame.local_team) continue;
 
-        Vec3 bone_pos = t.*(bone_list[bone_idx]);
-        if (bone_pos.length_sqr() < 1.0f) bone_pos = t.chest_pos;
-        if (bone_pos.length_sqr() < 1.0f) bone_pos = t.head_pos;
-        if (bone_pos.length_sqr() < 1.0f) continue;
+        // List of 4 bones already present in the struct
+        const Vec3 candidate_bones[] = {
+            t.head_pos,
+            t.neck_pos,
+            t.chest_pos,
+            t.pelvis_pos
+        };
 
-        AimAngles desired = calculate_angle(eye_pos, bone_pos);
-        float fov = get_fov_between(view_angles, desired);
+        // Check every bone: select the one that is visible and closest to the crosshair
+        for (const auto& bone_pos : candidate_bones) {
+            if (bone_pos.length_sqr() < 1.0f) continue;
 
-        if (fov > best_fov) continue;
+            AimAngles desired = calculate_angle(eye_pos, bone_pos);
+            float fov = get_fov_between(view_angles, desired);
 
-        if (g_settings.aimbot_visible_check && !check_target_visible(eye_pos, bone_pos, t, frame.local_player_index)) {
-            continue;
+            // Ignore if it moves outside the FOV circle
+            if (fov > best_fov) continue;
+
+            // Check wall obstacles (BVH)
+            if (g_settings.aimbot_visible_check && !check_target_visible(eye_pos, bone_pos, t, frame.local_player_index)) {
+                continue;
+            }
+
+            best_fov = fov;
+            best_aim_point = bone_pos;
+            found = true;
         }
-
-        best_fov = fov;
-        best_aim_point = bone_pos;
-        found = true;
     }
 
     if (found) {

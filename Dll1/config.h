@@ -69,21 +69,6 @@ public:
         write(f, "bomb_x", g_settings.bomb_x);
         write(f, "bomb_y", g_settings.bomb_y);
 
-        f << "\n[Radar]\n";
-        write(f, "draw_radar", g_settings.draw_radar);
-        write(f, "radar_circle", g_settings.radar_circle);
-        write(f, "radar_rotate", g_settings.radar_rotate);
-        write(f, "radar_rings", g_settings.radar_rings);
-        write(f, "radar_names", g_settings.radar_names);
-        write(f, "radar_names_font_size", g_settings.radar_names_font_size);
-        write(f, "radar_size", g_settings.radar_size);
-        write(f, "radar_zoom", g_settings.radar_zoom);
-        write(f, "radar_bg_alpha", g_settings.radar_bg_alpha);
-        write(f, "radar_x", g_settings.radar_x);
-        write(f, "radar_y", g_settings.radar_y);
-        write_arr(f, "radar_enemy_color", g_settings.radar_enemy_color, 4);
-        write_arr(f, "radar_team_color", g_settings.radar_team_color, 4);
-
         f << "\n[Grenades]\n";
         write(f, "grenade_helper_enabled", g_settings.grenade_helper_enabled);
         write(f, "grenade_helper_visible", g_settings.grenade_helper_visible);
@@ -250,20 +235,6 @@ public:
         read(kv, "spec_y", g_settings.spec_y);
         read(kv, "bomb_x", g_settings.bomb_x);
         read(kv, "bomb_y", g_settings.bomb_y);
-
-        read(kv, "draw_radar", g_settings.draw_radar);
-        read(kv, "radar_circle", g_settings.radar_circle);
-        read(kv, "radar_rotate", g_settings.radar_rotate);
-        read(kv, "radar_rings", g_settings.radar_rings);
-        read(kv, "radar_names", g_settings.radar_names);
-        read(kv, "radar_names_font_size", g_settings.radar_names_font_size);
-        read(kv, "radar_size", g_settings.radar_size);
-        read(kv, "radar_zoom", g_settings.radar_zoom);
-        read(kv, "radar_bg_alpha", g_settings.radar_bg_alpha);
-        read(kv, "radar_x", g_settings.radar_x);
-        read(kv, "radar_y", g_settings.radar_y);
-        read_arr(kv, "radar_enemy_color", g_settings.radar_enemy_color, 4);
-        read_arr(kv, "radar_team_color", g_settings.radar_team_color, 4);
 
         read(kv, "grenade_helper_enabled", g_settings.grenade_helper_enabled);
         read(kv, "grenade_helper_visible", g_settings.grenade_helper_visible);

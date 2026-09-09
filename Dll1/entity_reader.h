@@ -345,7 +345,6 @@ private:
         bool is_dormant = read_mem<bool>(scene_node + g_offsets.CGameSceneNode.m_bDormant);
         Vec3 origin = read_mem<Vec3>(scene_node + g_offsets.CGameSceneNode.m_vecAbsOrigin);
 
-        // Tapis pemain dormant atau entiti kosong/loading (0,0,0)
         if (is_dormant || (origin.x == 0.0f && origin.y == 0.0f && origin.z == 0.0f)) {
             state.players[i].valid = false;
             return;

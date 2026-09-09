@@ -342,33 +342,6 @@ private:
             os::put_switch("Visible Check", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.aimbot_visible_check);
             os::put_switch("Draw FOV Circle", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.draw_aimbot_fov,
                 true, "###fovc", g_settings.aimbot_fov_color);
-
-            // Status BVH Live
-            ImGui::Dummy({ 0.f, 4.f });
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            ImGui::TextColored(
-                g_bvh.valid() ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) : ImVec4(1.0f, 0.35f, 0.35f, 1.0f),
-                "Map Mesh: %s (%zu Tris)",
-                g_bvh.valid() ? "Ready" : "Not Loaded",
-                g_bvh.count()
-            );
-
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            if (ImGui::Button("Reload Map Geometry", { 160.f, 22.f })) {
-                std::thread([]() {
-                    g_bvh.clear();
-                    g_bvh.parse();
-                    }).detach();
-            }
-
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[BVH Diagnostic]");
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            ImGui::Text("Status: %s (Step %d)", g_bvh_dbg.status, g_bvh_dbg.step);
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            ImGui::Text("World: 0x%llX", g_bvh_dbg.world);
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-            ImGui::Text("Bodies: %d (Parsed: %d)", g_bvh_dbg.body_count, g_bvh_dbg.bodies_processed);
         }
 
         ImGui::NextColumn();
@@ -459,18 +432,6 @@ private:
         os::put_slider_float("Head Radius", 5.f, &g_settings.head_radius, 1.f, 10.f, "%.1f");
         os::put_slider_float("Depth Scale", 5.f, &g_settings.depth_scale, 100.f, 1500.f, "%.0f");
         os::put_slider_float("Glow Outer", 5.f, &g_settings.glow_expand_outer, 0.f, 15.f, "%.1f");
-
-        ImGui::NewLine();
-        os::gradient_text("Radar");
-        os::put_switch("Show", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.draw_radar);
-        os::put_switch("Circle", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.radar_circle);
-        os::put_switch("Rotate", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.radar_rotate);
-        os::put_switch("Range Rings", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.radar_rings);
-        os::put_switch("Player Names", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.radar_names);
-        os::put_color_edit("Enemy", "###rade", 5.f, ImGui::GetFrameHeight() * 1.7f, g_settings.radar_enemy_color);
-        os::put_color_edit("Team", "###radt", 5.f, ImGui::GetFrameHeight() * 1.7f, g_settings.radar_team_color);
-        if (g_settings.radar_names)
-            os::put_slider_float("Name Font", 5.f, &g_settings.radar_names_font_size, 8.f, 20.f, "%.0f");
 
         ImGui::Columns(1);
     }

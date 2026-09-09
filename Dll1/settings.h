@@ -13,7 +13,6 @@ struct MenuSettings {
     bool draw_teammates = false;
     bool draw_head = true;
     bool draw_spectators = true;
-    bool draw_radar = true;
     bool chams_enabled = true;
     int chams_style = 3;
     bool vis_check_skeleton = false;
@@ -48,20 +47,6 @@ struct MenuSettings {
     float esp_opacity_drop_start = 1500.0f;   // distance at which fade begins
     float esp_opacity_drop_end = 3000.0f;  // distance at which fully faded
     float esp_opacity_drop_min = 0.1f;     // minimum alpha multiplier at max distance
-
-    // Radar
-    float radar_size = 330.0f;
-    float radar_zoom = 0.35f;
-    float radar_x = 35.0f;
-    float radar_y = 35.0f;
-    bool radar_rotate = true;
-    bool radar_circle = true;
-    bool radar_rings = false;
-    bool radar_names = false;
-    float radar_names_font_size = 11.0f;
-    float radar_bg_alpha = 0.0f;
-    float radar_enemy_color[4] = { 1.00f, 0.30f, 0.30f, 0.90f };
-    float radar_team_color[4] = { 0.30f, 0.55f, 1.00f, 0.90f };
 
     int box_style = 0;
     float box_thickness = 1.5f;
@@ -146,7 +131,6 @@ struct MenuSettings {
     bool  triggerbot_scoped_only = false;
     int   key_triggerbot = 'X';
     float triggerbot_delay = 50.f;
-
 
     // Crosshair
     bool crosshair_enabled = false;
