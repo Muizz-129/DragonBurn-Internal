@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "bvh.h"
 #include "aimbot_math.h"
+#include "rcs.h" // Selamat dimasukkan kerana rcs.h tiada circular include
 
 struct AimbotTarget {
     bool valid = false;
@@ -64,21 +65,19 @@ inline float aim_error_y = 0.0f;
 
 static inline bool is_holding_non_gun(uint16_t w_id) {
     if (w_id == 0) return false;
-    if (w_id == 41 || w_id == 42 || w_id == 59 || w_id == 524) return true; // Knife
-    if (w_id >= 43 && w_id <= 48) return true;                              // Bom
-    if (w_id == 49) return true;                                            // C4
+    if (w_id == 41 || w_id == 42 || w_id == 59 || w_id == 524) return true;
+    if (w_id >= 43 && w_id <= 48) return true;
+    if (w_id == 49) return true;
     if (w_id >= 500 && w_id <= 530) return true;
     return false;
 }
 
 static inline bool check_target_visible(const Vec3& eye_pos, const Vec3& target_pos, const AimbotTarget& target, int local_player_index) {
-    // 1. Prioritize BVH Raytrace geometry checks if the map is loaded
     if (g_bvh.valid() && g_bvh.count() > 0) {
         const auto trace = g_bvh.trace_ray(eye_pos, target_pos);
         return (!trace.hit || trace.fraction > 0.97f);
     }
 
-    // 2. Fallback Radar: allow firing if the enemy is active in the bitmask
     if (local_player_index >= 0 && local_player_index < 64 && target.bSpottedByMask != 0) {
         return (target.bSpottedByMask & (1ULL << local_player_index)) != 0;
     }
@@ -87,96 +86,162 @@ static inline bool check_target_visible(const Vec3& eye_pos, const Vec3& target_
 }
 
 static inline void aimbot_tick() {
+    static int locked_target_idx = -1;
+
     if (!g_settings.master_switch || !g_settings.aimbot_enabled || g_settings.menu_open) {
         aim_error_x = aim_error_y = 0.0f;
+        locked_target_idx = -1;
+        g_rcs.set_aimbot_locked(false);
         return;
     }
 
     int key = g_settings.key_aimbot ? g_settings.key_aimbot : VK_XBUTTON1;
     if (!(GetAsyncKeyState(key) & 0x8000)) {
         aim_error_x = aim_error_y = 0.0f;
+        locked_target_idx = -1;
+        g_rcs.set_aimbot_locked(false);
         return;
     }
 
     AimbotFrame frame = g_aimbot_data.snapshot();
-    if (frame.local_pawn == 0 || frame.screen_w == 0) return;
-    if (is_holding_non_gun(frame.local_weapon_def_index)) return;
+    if (frame.local_pawn == 0 || frame.screen_w == 0) {
+        locked_target_idx = -1;
+        g_rcs.set_aimbot_locked(false);
+        return;
+    }
+    if (is_holding_non_gun(frame.local_weapon_def_index)) {
+        locked_target_idx = -1;
+        g_rcs.set_aimbot_locked(false);
+        return;
+    }
+
+    // Salurkan data senjata dan sensitiviti ke RCS
+    float sens = (g_settings.aimbot_sensitivity > 0.01f) ? g_settings.aimbot_sensitivity : 1.0f;
+    g_rcs.update_weapon_state(frame.local_weapon_def_index, sens);
 
     Vec3 eye_pos = (frame.camera_valid && frame.eye_origin.length_sqr() > 1.0f)
         ? frame.eye_origin
         : Vec3{ frame.eye_origin.x, frame.eye_origin.y, frame.eye_origin.z + 64.0f };
 
     AimAngles view_angles{ frame.view_angles.x, frame.view_angles.y };
-
     float max_fov = (g_settings.aimbot_fov > 0.1f) ? static_cast<float>(g_settings.aimbot_fov) : 5.0f;
+
     float best_score = 999999.0f;
     float target_distance = 0.0f;
     bool found = false;
     Vec3 best_aim_point{};
+    int best_candidate_idx = -1;
 
-    for (int i = 1; i < 64; i++) {
-        const auto& t = frame.targets[i];
-        if (!t.valid || t.health <= 0 || t.health > 100) continue;
+    struct BoneCandidate {
+        int flag;
+        Vec3 pos;
+    };
 
-        // Team check
-        if (g_settings.aimbot_team_check && t.team == frame.local_team) continue;
+    // 1. Semak sasaran sedia ada
+    if (locked_target_idx >= 1 && locked_target_idx < 64) {
+        const auto& lt = frame.targets[locked_target_idx];
+        if (lt.valid && lt.health > 0 && lt.health <= 100 && (!g_settings.aimbot_team_check || lt.team != frame.local_team)) {
+            const BoneCandidate candidate_bones[] = {
+                { BONE_FLAG_HEAD,   lt.head_pos },
+                { BONE_FLAG_NECK,   lt.neck_pos },
+                { BONE_FLAG_CHEST,  lt.chest_pos },
+                { BONE_FLAG_PELVIS, lt.pelvis_pos }
+            };
+            for (const auto& b : candidate_bones) {
+                if (!(g_settings.aimbot_target_bones & b.flag)) continue;
+                if (b.pos.length_sqr() < 1.0f) continue;
 
-        const Vec3 candidate_bones[] = {
-            t.head_pos,
-            t.neck_pos,
-            t.chest_pos,
-            t.pelvis_pos
-        };
-
-        for (const auto& bone_pos : candidate_bones) {
-            if (bone_pos.length_sqr() < 1.0f) continue;
-
-            AimAngles desired = calculate_angle(eye_pos, bone_pos);
-            float fov = get_fov_between(view_angles, desired);
-
-            // Filter out if outside the FOV circle
-            if (fov > max_fov) continue;
-
-            // Check the BVH wall
-            if (g_settings.aimbot_visible_check && !check_target_visible(eye_pos, bone_pos, t, frame.local_player_index)) {
-                continue;
+                AimAngles desired = calculate_angle(eye_pos, b.pos);
+                float fov = get_fov_between(view_angles, desired);
+                if (fov <= max_fov) {
+                    if (!g_settings.aimbot_visible_check || check_target_visible(eye_pos, b.pos, lt, frame.local_player_index)) {
+                        best_aim_point = b.pos;
+                        target_distance = (b.pos - eye_pos).length();
+                        found = true;
+                        break;
+                    }
+                }
             }
-
-            // 1. Calculate the actual 3D distance (Source 2 engine units)
-            float dist = (bone_pos - eye_pos).length();
-
-            // 2. Dynamic Target Scoring (Combination of FOV angle + Distance)
-            // Prioritizing nearby targets close to the crosshair
-            float score = fov * 0.7f + (dist / 100.0f) * 0.3f;
-
-            if (score < best_score) {
-                best_score = score;
-                best_aim_point = bone_pos;
-                target_distance = dist;
-                found = true;
-            }
+        }
+        if (!found) {
+            locked_target_idx = -1;
         }
     }
 
+    // 2. Cari sasaran baharu jika tiada sasaran terkunci
+    if (!found) {
+        for (int i = 1; i < 64; i++) {
+            const auto& t = frame.targets[i];
+            if (!t.valid || t.health <= 0 || t.health > 100) continue;
+            if (g_settings.aimbot_team_check && t.team == frame.local_team) continue;
+
+            const BoneCandidate candidate_bones[] = {
+                { BONE_FLAG_HEAD,   t.head_pos },
+                { BONE_FLAG_NECK,   t.neck_pos },
+                { BONE_FLAG_CHEST,  t.chest_pos },
+                { BONE_FLAG_PELVIS, t.pelvis_pos }
+            };
+
+            for (const auto& b : candidate_bones) {
+                if (!(g_settings.aimbot_target_bones & b.flag)) continue;
+                if (b.pos.length_sqr() < 1.0f) continue;
+
+                AimAngles desired = calculate_angle(eye_pos, b.pos);
+                float fov = get_fov_between(view_angles, desired);
+                if (fov > max_fov) continue;
+
+                if (g_settings.aimbot_visible_check && !check_target_visible(eye_pos, b.pos, t, frame.local_player_index)) {
+                    continue;
+                }
+
+                float dist = (b.pos - eye_pos).length();
+                float score = fov * 0.75f + (dist / 100.0f) * 0.25f;
+
+                if (score < best_score) {
+                    best_score = score;
+                    best_aim_point = b.pos;
+                    target_distance = dist;
+                    best_candidate_idx = i;
+                    found = true;
+                }
+            }
+        }
+
+        if (found) {
+            locked_target_idx = best_candidate_idx;
+        }
+    }
+
+    // 3. Gerakkan tetikus (Kaedah 1: Integrasi Recoil ke dalam Aimbot)
     if (found) {
+        // Nyatakan bahawa Aimbot sedang mengawal pergerakan tetikus
+        g_rcs.set_aimbot_locked(true);
+
         AimAngles desired = calculate_angle(eye_pos, best_aim_point);
+
+        int current_bullet = g_rcs.get_current_bullet();
+
+        if (current_bullet == 0) {
+            // BULLET 0: Tembakan pertama bersih ke tulang kepala/leher
+            // Tiada sebarang tolakan sudut recoil
+        }
+        else {
+            // BULLET 1, 2, 3... : Peluru sudah mula melambung
+            // Masukkan offset recoil corak
+            desired.pitch += g_rcs.get_recoil_pitch();
+            desired.yaw -= g_rcs.get_recoil_yaw();
+        }
 
         float delta_pitch = desired.pitch - view_angles.pitch;
         float delta_yaw = normalize_yaw(desired.yaw - view_angles.yaw);
 
-        // 3. Dynamic Smoothing (Distance-based Smoothing Adjustment)
-        // Typical CS2 distance: 200 units (close) to 3000 units (far)
         float base_smooth = (g_settings.aimbot_smooth >= 1.0f) ? g_settings.aimbot_smooth : 1.0f;
-
-        // Speed ​​ratio retention: reduced resistance at close range, greater stability at long range
-        float dist_scale = std::clamp(target_distance / 800.0f, 0.45f, 2.2f);
-        float dynamic_smooth = base_smooth * dist_scale;
-        if (dynamic_smooth < 1.0f) dynamic_smooth = 1.0f;
+        float dist_scale = std::clamp(target_distance / 800.0f, 0.45f, 2.0f);
+        float dynamic_smooth = std::max(1.0f, base_smooth * dist_scale);
 
         delta_pitch /= dynamic_smooth;
         delta_yaw /= dynamic_smooth;
 
-        float sens = (g_settings.aimbot_sensitivity > 0.01f) ? g_settings.aimbot_sensitivity : 1.0f;
         constexpr float m_yaw = 0.022f;
 
         float move_x = -delta_yaw / (m_yaw * sens);
@@ -201,17 +266,21 @@ static inline void aimbot_tick() {
         }
     }
     else {
+        // Tiada musuh dikunci: benarkan RCS menembak dinding secara bebas
+        g_rcs.set_aimbot_locked(false);
         aim_error_x = aim_error_y = 0.0f;
     }
 }
 
 static inline void aimbot_thread_func() {
-    constexpr double target_tick_fps = 128.0;
+    constexpr double target_tick_fps = 144.0;
     constexpr double frame_time = 1000.0 / target_tick_fps;
 
     while (g_aimbot_running.load(std::memory_order_relaxed)) {
         auto tick_start = std::chrono::high_resolution_clock::now();
+
         aimbot_tick();
+
         auto tick_end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed = tick_end - tick_start;
 

@@ -286,35 +286,71 @@ private:
         uintptr_t weapon = EntityList::resolve_handle(entity_list, handle);
         if (!EntityList::is_valid_ptr(weapon)) return;
 
+        // 1. Baca rentetan nama terus dengan SATU panggilan read_raw_mem (Elak loop berulang & exception crash)
         char dname[64] = { 0 };
         uintptr_t ident = read_mem<uintptr_t>(weapon + g_offsets.CEntityInstance.m_pEntity);
         if (EntityList::is_valid_ptr(ident)) {
             uintptr_t str_ptr = read_mem<uintptr_t>(ident + g_offsets.CEntityIdentity.m_designerName);
             if (EntityList::is_valid_ptr(str_ptr)) {
-                for (size_t i = 0; i < sizeof(dname) - 1; ++i) {
-                    char c = read_mem<char>(str_ptr + i);
-                    if (c == '\0' || (unsigned char)c < 0x20 || (unsigned char)c > 0x7E) break;
-                    dname[i] = c;
-                }
+                read_raw_mem(str_ptr, dname, sizeof(dname) - 1);
+                dname[sizeof(dname) - 1] = '\0';
             }
         }
 
-        if (dname[0] != 0) {
-            std::string s(dname);
-            if (s.find("smoke") != std::string::npos)          out_def_index = 45;
-            else if (s.find("molotov") != std::string::npos)    out_def_index = 46;
-            else if (s.find("incgrenade") != std::string::npos) out_def_index = 48;
-            else if (s.find("hegrenade") != std::string::npos)  out_def_index = 44;
-            else if (s.find("flashbang") != std::string::npos)  out_def_index = 43;
-            else if (s.find("decoy") != std::string::npos)      out_def_index = 47;
-            else if (s.find("c4") != std::string::npos)         out_def_index = 49;
-            else if (s.find("knife") != std::string::npos || s.find("bayonet") != std::string::npos) out_def_index = 42;
-            else out_def_index = 1;
+        if (dname[0] != '\0') {
+            const char* raw = dname;
+            const char* clean_name = (strncmp(raw, "weapon_", 7) == 0) ? (raw + 7) : raw;
+            snprintf(out_name, max_len, "%s", clean_name);
 
-            snprintf(out_name, max_len, "%s", dname);
-            return;
+            // 2. Pemetaan ID pantas guna strstr (Zero memory allocation / laju gila)
+            if (strstr(raw, "ak47"))                        out_def_index = 7;
+            else if (strstr(raw, "deagle"))                 out_def_index = 1;
+            else if (strstr(raw, "m4a1_silencer"))          out_def_index = 60;
+            else if (strstr(raw, "m4a1"))                   out_def_index = 16;
+            else if (strstr(raw, "awp"))                    out_def_index = 9;
+            else if (strstr(raw, "usp_silencer"))           out_def_index = 61;
+            else if (strstr(raw, "glock"))                  out_def_index = 4;
+            else if (strstr(raw, "ssg08"))                  out_def_index = 40;
+            else if (strstr(raw, "sg556") || strstr(raw, "sg553")) out_def_index = 39;
+            else if (strstr(raw, "aug"))                    out_def_index = 8;
+            else if (strstr(raw, "galilar"))                out_def_index = 13;
+            else if (strstr(raw, "famas"))                  out_def_index = 10;
+            else if (strstr(raw, "mp9"))                    out_def_index = 34;
+            else if (strstr(raw, "mac10"))                  out_def_index = 17;
+            else if (strstr(raw, "mp7"))                    out_def_index = 33;
+            else if (strstr(raw, "mp5sd"))                  out_def_index = 23;
+            else if (strstr(raw, "ump45"))                  out_def_index = 24;
+            else if (strstr(raw, "p90"))                    out_def_index = 19;
+            else if (strstr(raw, "bizon"))                  out_def_index = 26;
+            else if (strstr(raw, "nova"))                   out_def_index = 35;
+            else if (strstr(raw, "xm1014"))                 out_def_index = 25;
+            else if (strstr(raw, "mag7"))                   out_def_index = 27;
+            else if (strstr(raw, "sawedoff"))               out_def_index = 29;
+            else if (strstr(raw, "m249"))                   out_def_index = 14;
+            else if (strstr(raw, "negev"))                  out_def_index = 28;
+            else if (strstr(raw, "p250"))                   out_def_index = 36;
+            else if (strstr(raw, "tec9"))                   out_def_index = 30;
+            else if (strstr(raw, "fiveseven"))              out_def_index = 3;
+            else if (strstr(raw, "cz75a"))                  out_def_index = 63;
+            else if (strstr(raw, "elite"))                  out_def_index = 2;
+            else if (strstr(raw, "revolver"))               out_def_index = 64;
+            else if (strstr(raw, "p2000") || strstr(raw, "hkp2000")) out_def_index = 32;
+            else if (strstr(raw, "taser"))                  out_def_index = 31;
+            else if (strstr(raw, "g3sg1"))                  out_def_index = 11;
+            else if (strstr(raw, "scar20"))                 out_def_index = 38;
+            else if (strstr(raw, "flashbang"))              out_def_index = 43;
+            else if (strstr(raw, "hegrenade"))              out_def_index = 44;
+            else if (strstr(raw, "smoke"))                  out_def_index = 45;
+            else if (strstr(raw, "molotov"))                out_def_index = 46;
+            else if (strstr(raw, "incgrenade"))             out_def_index = 48;
+            else if (strstr(raw, "decoy"))                  out_def_index = 47;
+            else if (strstr(raw, "c4"))                     out_def_index = 49;
+            else if (strstr(raw, "knife") || strstr(raw, "bayonet") || strstr(raw, "karambit") || strstr(raw, "butterfly")) out_def_index = 42;
+
+            if (out_def_index > 0) return;
         }
 
+        // 3. Fallback: Baca Item Definition Index terus jika nama designer gagal dikesan
         uint16_t id = read_mem<uint16_t>(
             weapon + g_offsets.C_EconEntity.m_AttributeManager
             + g_offsets.C_AttributeContainer.m_Item

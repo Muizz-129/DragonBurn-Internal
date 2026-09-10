@@ -2,6 +2,14 @@
 #include <windows.h>
 static constexpr float REFERENCE_HEIGHT = 1080.0f;
 
+enum TargetBoneFlags : uint32_t {
+    BONE_FLAG_NONE = 0,
+    BONE_FLAG_HEAD = 1 << 0, // 1
+    BONE_FLAG_NECK = 1 << 1, // 2
+    BONE_FLAG_CHEST = 1 << 2, // 4
+    BONE_FLAG_PELVIS = 1 << 3  // 8
+};
+
 struct MenuSettings {
     bool master_switch = true;
     bool esp_enabled = true;
@@ -19,7 +27,7 @@ struct MenuSettings {
     float vis_color_visible[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
     float vis_color_occluded[4] = { 1.0f, 0.2f, 0.2f, 1.0f };
 
-    bool use_vsync = true;
+    bool use_vsync = false;
     float target_fps = 144.0f;
 
     // ---- ESP Theme ----
@@ -119,7 +127,7 @@ struct MenuSettings {
     float aimbot_fov = 5.f;
     float aimbot_smooth = 1.0f;
     float aimbot_sensitivity = 1.0f; // in-game sensitivity 
-    int  aimbot_bone = 0; // 0=Head,1=Neck,2=Chest,3=Pelvis
+    uint32_t aimbot_target_bones = BONE_FLAG_HEAD | BONE_FLAG_NECK | BONE_FLAG_CHEST; // Lalai: Head + Neck + Chest
     bool aimbot_visible_check = true;
     bool aimbot_team_check = true;
     bool draw_aimbot_fov = false;

@@ -328,14 +328,43 @@ private:
             os::put_slider_float("Smoothness", 10.f, &g_settings.aimbot_smooth, 1.f, 20.f, "%.0f");
             os::put_slider_float("Sensitivity", 10.f, &g_settings.aimbot_sensitivity, 0.1f, 5.0f, "%.2f");
 
-            const char* bones[] = { "Head", "Neck", "Chest", "Pelvis" };
             {
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.f);
-                ImGui::TextDisabled("Bone");
+                ImGui::TextDisabled("Bones");
                 ImGui::SameLine();
                 os::align_right(160.f);
                 ImGui::SetNextItemWidth(160.f);
-                ImGui::Combo("###aim_bone", &g_settings.aimbot_bone, bones, 4);
+
+                // Bina teks preview mengikut tulang yang aktif
+                std::string preview = "";
+                if (g_settings.aimbot_target_bones & BONE_FLAG_HEAD)   preview += "Head, ";
+                if (g_settings.aimbot_target_bones & BONE_FLAG_NECK)   preview += "Neck, ";
+                if (g_settings.aimbot_target_bones & BONE_FLAG_CHEST)  preview += "Chest, ";
+                if (g_settings.aimbot_target_bones & BONE_FLAG_PELVIS) preview += "Pelvis, ";
+
+                if (!preview.empty()) {
+                    preview.pop_back(); // Buang koma terakhir
+                    preview.pop_back();
+                }
+                else {
+                    preview = "None";
+                }
+
+                if (ImGui::BeginCombo("###aim_bones", preview.c_str())) {
+                    auto draw_bone_item = [](const char* name, int flag) {
+                        bool selected = (g_settings.aimbot_target_bones & flag) != 0;
+                        if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_DontClosePopups)) {
+                            g_settings.aimbot_target_bones ^= flag;
+                        }
+                        };
+
+                    draw_bone_item("Head", BONE_FLAG_HEAD);
+                    draw_bone_item("Neck", BONE_FLAG_NECK);
+                    draw_bone_item("Chest", BONE_FLAG_CHEST);
+                    draw_bone_item("Pelvis", BONE_FLAG_PELVIS);
+
+                    ImGui::EndCombo();
+                }
             }
 
             os::put_switch("Team Check", 10.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.aimbot_team_check);

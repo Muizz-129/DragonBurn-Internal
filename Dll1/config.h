@@ -148,7 +148,7 @@ public:
         write(f, "key_aimbot", g_settings.key_aimbot);
         write(f, "aimbot_smooth", g_settings.aimbot_smooth);
         write(f, "aimbot_sensitivity", g_settings.aimbot_sensitivity);
-        write(f, "aimbot_bone", g_settings.aimbot_bone);
+        write(f, "aimbot_target_bones", g_settings.aimbot_target_bones);
         write(f, "aimbot_team_check", g_settings.aimbot_team_check);
         write(f, "draw_aimbot_fov", g_settings.draw_aimbot_fov);
         write_arr(f, "aimbot_fov_color", g_settings.aimbot_fov_color, 4);
@@ -300,7 +300,7 @@ public:
         read(kv, "key_aimbot", g_settings.key_aimbot);
         read(kv, "aimbot_smooth", g_settings.aimbot_smooth);
         read(kv, "aimbot_sensitivity", g_settings.aimbot_sensitivity);
-        read(kv, "aimbot_bone", g_settings.aimbot_bone);
+        read(kv, "aimbot_target_bones", g_settings.aimbot_target_bones);
         read(kv, "aimbot_team_check", g_settings.aimbot_team_check);
         read(kv, "draw_aimbot_fov", g_settings.draw_aimbot_fov);
         read_arr(kv, "aimbot_fov_color", g_settings.aimbot_fov_color, 4);
@@ -325,6 +325,7 @@ private:
         if (start == std::string::npos) return "";
         return s.substr(start, end - start + 1);
     }
+    static void write(std::ofstream& f, const char* key, uint32_t v) { f << key << " = " << v << "\n"; }
     static void write(std::ofstream& f, const char* key, bool v) { f << key << " = " << (v ? 1 : 0) << "\n"; }
     static void write(std::ofstream& f, const char* key, int v) { f << key << " = " << v << "\n"; }
     static void write(std::ofstream& f, const char* key, float v) { f << key << " = " << v << "\n"; }
@@ -332,6 +333,9 @@ private:
         f << key << " = ";
         for (int i = 0; i < n; i++) { if (i) f << ","; f << v[i]; }
         f << "\n";
+    }
+    static void read(const std::unordered_map<std::string, std::string>& kv, const char* key, uint32_t& v) {
+        auto it = kv.find(key); if (it != kv.end()) v = static_cast<uint32_t>(std::stoul(it->second));
     }
     static void read(const std::unordered_map<std::string, std::string>& kv, const char* key, bool& v) {
         auto it = kv.find(key); if (it != kv.end()) v = (std::stoi(it->second) != 0);

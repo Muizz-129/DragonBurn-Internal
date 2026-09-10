@@ -1,16 +1,33 @@
 #pragma once
 #include "types.h"
 #include <cmath>
-
+#include <algorithm>
 
 constexpr float M_PI_F = 3.14159265358979323846f;
 constexpr float RAD2DEG = 180.0f / M_PI_F;
 constexpr float DEG2RAD = M_PI_F / 180.0f;
 
 struct AimAngles {
-    float pitch;  // x
-    float yaw;    // y
+    float pitch = 0.0f;
+    float yaw = 0.0f;
 };
+
+inline float clampf(float v, float lo, float hi)
+{
+    return std::fmax(lo, std::fmin(hi, v));
+}
+
+inline float normalize_yaw(float yaw)
+{
+    while (yaw > 180.0f)  yaw -= 360.0f;
+    while (yaw < -180.0f) yaw += 360.0f;
+    return yaw;
+}
+
+inline float normalize_pitch(float pitch)
+{
+    return clampf(pitch, -89.0f, 89.0f);
+}
 
 inline AimAngles calculate_angle(const Vec3& src, const Vec3& dst)
 {
@@ -21,16 +38,9 @@ inline AimAngles calculate_angle(const Vec3& src, const Vec3& dst)
     float dist_xy = sqrtf(dx * dx + dy * dy);
 
     AimAngles angles;
-    angles.pitch = atan2f(-dz, dist_xy) * RAD2DEG;
-    angles.yaw = atan2f(dy, dx) * RAD2DEG;
+    angles.pitch = normalize_pitch(atan2f(-dz, dist_xy) * RAD2DEG);
+    angles.yaw = normalize_yaw(atan2f(dy, dx) * RAD2DEG);
     return angles;
-}
-
-inline float normalize_yaw(float yaw)
-{
-    while (yaw > 180.0f)  yaw -= 360.0f;
-    while (yaw < -180.0f) yaw += 360.0f;
-    return yaw;
 }
 
 inline float get_fov_between(const AimAngles& view, const AimAngles& target)
