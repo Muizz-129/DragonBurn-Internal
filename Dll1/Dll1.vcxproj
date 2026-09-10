@@ -222,7 +222,9 @@ if exist "$(ProjectDir)themes" xcopy /E /I /Y "$(ProjectDir)themes" "$(OutDir)th
     <ClInclude Include="input.h" />
     <ClInclude Include="menu.h" />
     <ClInclude Include="offsets.h" />
+    <ClInclude Include="patterns.h" />
     <ClInclude Include="projectile_trails.h" />
+    <ClInclude Include="rcs.h" />
     <ClInclude Include="render.h" />
     <ClInclude Include="settings.h" />
     <ClInclude Include="spectators.h" />
@@ -231,7 +233,6 @@ if exist "$(ProjectDir)themes" xcopy /E /I /Y "$(ProjectDir)themes" "$(OutDir)th
     <ClInclude Include="utils.h" />
     <ClInclude Include="visible_esp.h" />
     <ClInclude Include="weapon_icons.h" />
-    <ClInclude Include="xorstr.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\helpers\fonts.cpp" />

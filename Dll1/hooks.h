@@ -5,7 +5,6 @@
 #include <vector>
 #include <cstdio>
 #include "render.h"
-#include "xorstr.h"
 
 namespace Hooks {
     typedef HRESULT(NTAPI* Present_t)(IDXGISwapChain*, UINT, UINT);
@@ -84,15 +83,18 @@ namespace Hooks {
     inline HRESULT NTAPI hkResizeBuffers(IDXGISwapChain* sc, UINT bc, UINT w, UINT h, DXGI_FORMAT fmt, UINT flags) {
         if (!oResizeBuffers) return E_FAIL;
 
-        if (Render::g_pPinnedSwapChain && sc == Render::g_pPinnedSwapChain) {
-            Render::cleanup_render_target();
-        }
+        // Clear the old render target and empty the DirectX command queue
+        Render::cleanup_render_target();
 
+        // Call the original function to resize the CS2 buffer resolution
         HRESULT hr = oResizeBuffers(sc, bc, w, h, fmt, flags);
 
-        if (Render::g_pPinnedSwapChain && sc == Render::g_pPinnedSwapChain && Render::g_pDevice) {
+        // If the resolution is successfully changed and the swapchain remains valid, rebuild the RTV
+        if (SUCCEEDED(hr) && Render::g_pDevice) {
+            Render::g_pPinnedSwapChain = sc; // Update the active swapchain if the address changes
             Render::create_render_target(sc);
         }
+
         return hr;
     }
 
@@ -124,12 +126,12 @@ namespace Hooks {
 
         HMODULE hOverlay = nullptr;
         for (int i = 0; i < 100 && !hOverlay; i++) {
-            hOverlay = GetModuleHandleA(_xor_("GameOverlayRenderer64.dll").c_str());
+            hOverlay = GetModuleHandleA("GameOverlayRenderer64.dll");
             if (!hOverlay) Sleep(100);
         }
 
         if (!hOverlay) {
-            show_error_console(_xor_("Failed to locate GameOverlayRenderer64.dll. Ensure Steam overlay is enabled.").c_str(), hModule);
+            show_error_console("Failed to locate GameOverlayRenderer64.dll. Ensure Steam overlay is enabled.", hModule);
             return 0;
         }
 

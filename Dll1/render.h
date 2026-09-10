@@ -30,17 +30,28 @@ namespace Render {
     inline EntityReader g_entity_reader;
 
     inline void create_render_target(IDXGISwapChain* pSwapChain) {
+        if (!pSwapChain || !g_pDevice) return;
+
         ID3D11Texture2D* pBackBuffer = nullptr;
-        pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer);
-        if (pBackBuffer) {
+        // Use IID_PPV_ARGS and check SUCCEEDED to avoid memory errors
+        HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
+        if (SUCCEEDED(hr) && pBackBuffer) {
             g_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
             pBackBuffer->Release();
         }
     }
 
     inline void cleanup_render_target() {
+        if (g_pContext) {
+            // 1. Disconnect the render target from the GPU pipeline
+            g_pContext->OMSetRenderTargets(0, nullptr, nullptr);
+            // 2.Clear all active states (shaders, buffers, samplers)
+            g_pContext->ClearState();
+            // 3. Force the driver to process memory release right now
+            g_pContext->Flush();
+        }
+
         if (g_pRenderTargetView) {
-            if (g_pContext) g_pContext->OMSetRenderTargets(0, nullptr, nullptr);
             g_pRenderTargetView->Release();
             g_pRenderTargetView = nullptr;
         }
@@ -251,5 +262,33 @@ namespace Render {
         ImGui::Render();
         g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    }
+
+    inline void shutdown() {
+        if (!g_Init) return;
+
+        // Restore the original WindowProc input function.
+        Input::unhook();
+
+        // Clear Render Target View
+        cleanup_render_target();
+
+        // Clean up the ImGui backend
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+
+        // Release the DirectX device if held
+        if (g_pContext) {
+            g_pContext->Release();
+            g_pContext = nullptr;
+        }
+        if (g_pDevice) {
+            g_pDevice->Release();
+            g_pDevice = nullptr;
+        }
+
+        g_pPinnedSwapChain = nullptr;
+        g_Init = false;
     }
 }

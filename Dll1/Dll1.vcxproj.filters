@@ -213,7 +213,10 @@
     <ClInclude Include="theme_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="xorstr.h">
+    <ClInclude Include="rcs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="patterns.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -43,8 +43,6 @@ struct Offsets {
 
     struct {
         uintptr_t m_pObserverServices        = 0x1220; // CPlayer_ObserverServices*
-        uintptr_t m_iShotsFired              = 0x1C8C; // int32
-        uintptr_t m_pAimPunchServices        = 0x14B8; // CCSPlayer_AimPunchServices*
     } C_BasePlayerPawn;
 
     struct {
@@ -55,6 +53,8 @@ struct Offsets {
         uintptr_t m_bIsScoped                = 0x1C78; // bool
         uintptr_t m_entitySpottedState       = 0x1C60; // EntitySpottedState_t
         uintptr_t m_iIDEntIndex              = 0x342C; // CEntityIndex
+        uintptr_t m_iShotsFired              = 0x1C8C; // int32
+        uintptr_t m_pAimPunchServices        = 0x14B8; // CCSPlayer_AimPunchServices*
     } C_CSPlayerPawn;
 
     struct {
@@ -83,6 +83,10 @@ struct Offsets {
     struct {
         uintptr_t m_iItemDefinitionIndex     = 0x1BA; // uint16
     } C_EconItemView;
+
+    struct {
+        uintptr_t m_predictableBaseAngle = 0x50; // QAngle (Pitch = x, Yaw = y)
+    } CCSPlayer_AimPunchServices;
 
     // Spotted State
     struct {

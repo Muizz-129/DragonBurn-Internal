@@ -2,9 +2,11 @@
 #include <iostream>
 #include <cstdio>
 #include "hooks.h"
+#include "render.h"
 #include "utils.h"
 #include "config.h"
 #include "aimbot.h"
+#include "rcs.h"
 #include "settings.h"
 
 // ASCII color (24-bit TrueColor)
@@ -37,7 +39,6 @@ static void init_console() {
 }
 
 static void print_dragonburn_banner() {
-    // The banner is composed by blending colors at compile-time between the foreground characters and the shadow '░'
     std::cout <<
         "\n"
         C_MINT   "   ██████╗" C_SHADOW "░" C_MINT "██████╗" C_SHADOW "░░" C_MINT "█████╗" C_SHADOW "░░" C_MINT "██████╗" C_SHADOW "░░" C_MINT "██████╗" C_SHADOW "░" C_MINT "███╗" C_SHADOW "░░" C_MINT "██╗██████╗" C_SHADOW "░" C_MINT "██╗" C_SHADOW "░░░" C_MINT "██╗██████╗" C_SHADOW "░" C_MINT "███╗" C_SHADOW "░░" C_MINT "██╗\n"
@@ -71,29 +72,45 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
         Sleep(200);
     }
 
-    // 3. Load configuration only once
+    // 3. Load configuration
     Config::load(get_dll_directory() + "config.ini");
 
-    // 4. Enable Steam Overlay
+    // 4. Hook the Steam Overlay
     Hooks::hook_thread(lpParam);
 
-    // Start Aimbot
+    // Start the Aimbot and RCS threads
     start_aimbot_thread();
+    g_rcs.start();
 
     // 5. Exit button monitor loop (VK_INSERT)
     while (true) {
         if (g_settings.key_exit && (GetAsyncKeyState(g_settings.key_exit) & 0x8000)) {
+            // Wait for the button to be released to avoid repeated triggering
+            while (GetAsyncKeyState(g_settings.key_exit) & 0x8000) {
+                Sleep(10);
+            }
             break;
         }
         Sleep(100);
     }
 
-    // 6. Cleaning routine before DLL leaves
-    std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Detaching hooks and exiting thread...\n";
+    // 6. Cleaning routine before DLL exit (Must follow this sequence)
+    std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Stopping background threads...\n";
     stop_aimbot_thread();
-    Sleep(250);
+    g_rcs.stop();
+
+    std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Restoring Steam Overlay pointers...\n";
+    Hooks::unhook(); // Restore original Steam pointer
+
+    // Allow some time for the current frame rendering call to complete
+    Sleep(150);
+
+    std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Cleaning up ImGui and DirectX resources...\n";
+    Render::shutdown(); //Clean up ImGui, the WindowProc hook, and D3D resources
 
     cleanup_console();
+
+    // Unload the DLL from CS2 memory and terminate the thread
     FreeLibraryAndExitThread(hModule, 0);
     return 0;
 }
