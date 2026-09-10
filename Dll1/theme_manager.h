@@ -27,7 +27,7 @@ public:
     std::vector<std::string> theme_files;
     int selected_theme_index = 0;
 
-    // Dapatkan folder lokasi sebenar fail DLL
+    // Get the actual location folder of the DLL file
     std::string get_dll_directory() {
         char path[MAX_PATH]{};
         HMODULE hm = NULL;

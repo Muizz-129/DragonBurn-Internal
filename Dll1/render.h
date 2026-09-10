@@ -116,6 +116,17 @@ namespace Render {
         if (is_in_game) {
             FrameState state = g_entity_reader.read_frame(screen_w, screen_h);
 
+            static std::string last_map = "";
+            if (state.map_name != last_map) {
+                if (!state.map_name.empty()) {
+                    std::thread([]() {
+                        g_bvh.clear();
+                        g_bvh.parse(); // Rescan the current physics triangle map into memory
+                        }).detach();
+                }
+                last_map = state.map_name;
+            }
+
             // Publish data for the Aimbot thread
             AimbotFrame ab_frame{};
             ab_frame.local_pawn = state.local.pawn;
@@ -152,9 +163,18 @@ namespace Render {
                 for (int i = 0; i < 64; i++) {
                     auto& p = state.players[i];
                     if (!p.valid) continue;
+
                     for (int b = 0; b < MAX_BONE; b++) {
                         p.visible[b] = w2s_depth(p.bones_world[b], state.view_matrix, screen_w, screen_h, p.screens[b], p.depths[b]);
                     }
+
+                    static auto last_ray_dbg = std::chrono::steady_clock::now();
+                    if (p.team != state.local.team && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_ray_dbg).count() >= 500) {
+                        Vec3 eye = (state.local.camera.valid && state.local.camera.origin.length_sqr() > 1.0f)
+                            ? state.local.camera.origin
+                            : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
+                    }
+
                     g_esp.draw_player(draw, p, state.local.team, screen_w, screen_h, i, state.local.is_scoped);
                 }
 

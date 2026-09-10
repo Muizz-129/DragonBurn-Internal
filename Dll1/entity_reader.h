@@ -135,16 +135,23 @@ public:
         uintptr_t global_vars = read_mem<uintptr_t>(client_base + g_offsets.client.dwGlobalVars);
         if (global_vars) {
             uintptr_t current_map_ptr = read_mem<uintptr_t>(global_vars + 0x188);
+            if (!current_map_ptr) {
+                current_map_ptr = read_mem<uintptr_t>(global_vars + 0x180);
+            }
+
             if (current_map_ptr != cached_map_ptr && current_map_ptr != 0) {
                 char map_name[64] = { 0 };
                 if (read_raw_mem(current_map_ptr, map_name, sizeof(map_name))) {
                     cached_map_scale = get_map_scale(map_name);
                     cached_map_ptr = current_map_ptr;
                     cached_map_name = map_name;
+
+                    std::cout << "[GAME] Map exchange detected: " << map_name << std::endl;
+
                     std::thread([]() {
-                        Sleep(1500);
                         g_bvh.clear();
                         g_bvh.parse();
+                        std::cout << "[+] [BVH] Finished scanning the map's physics data into memory." << std::endl;
                         }).detach();
                 }
             }
@@ -399,36 +406,38 @@ private:
                 BONE_RHIP, BONE_RKNEE, BONE_RFOOT,
             };
 
+            // Make sure cam_eye has a valid value, if (0,0,0) use pawn coordinates + eye height
+            Vec3 cam_eye = (state.local.camera.valid && state.local.camera.origin.length_sqr() > 1.0f)
+                ? state.local.camera.origin
+                : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
+
             if (g_bvh.valid() && g_bvh.count() > 0 && (state.local.camera.valid || state.local.pawn)) {
-                Vec3 cam_eye = state.local.camera.valid ? state.local.camera.origin : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
+                int occluded_bones = 0;
                 for (int b : BONES_TO_TRACE) {
                     auto tr = g_bvh.trace_ray(cam_eye, bone_buf[b].pos);
-                    player.bone_occluded[b] = tr.hit && tr.fraction <= 0.97f;
+                    player.bone_occluded[b] = tr.hit && (tr.fraction <= 0.97f);
+                    if (player.bone_occluded[b]) {
+                        occluded_bones++;
+                    }
                 }
                 traced = true;
+
+                // An enemy is only considered "spotted" if their head, neck, or chest is NOT obstructed by a wall
+                bool core_visible = !player.bone_occluded[BONE_HEAD] || !player.bone_occluded[BONE_CHEST] || !player.bone_occluded[BONE_PELVIS];
+                player.is_local_spotted = core_visible;
             }
+
             if (!traced) {
                 bool spotted_by_local = false;
                 if (state.local_player_index >= 0 && player.bSpottedByMask != 0)
                     spotted_by_local = (player.bSpottedByMask >> state.local_player_index) & 1u;
+
                 bool is_spotted = is_spotted_ingame || spotted_by_local;
-                for (int b = 0; b < MAX_BONE; b++)
+                for (int b = 0; b < MAX_BONE; b++) {
                     player.bone_occluded[b] = !is_spotted;
-            }
-            player.is_local_spotted = true;
-        }
-
-        if (state.crosshair_entity_index > 0) {
-            uint32_t pawn_ent_index = pawn_handle & EntityList::HANDLE_MASK;
-            if (pawn_ent_index == (uint32_t)state.crosshair_entity_index) {
-                for (int b = 0; b < MAX_BONE; b++)
-                    player.bone_occluded[b] = false;
+                }
+                player.is_local_spotted = is_spotted;
             }
         }
-
-        player.flash_duration = snap.get<float>(g_offsets.C_CSPlayerPawnBase.m_flFlashDuration);
-
-        auto now = std::chrono::steady_clock::now();
-        if (is_spotted_ingame) last_spotted_time[i] = now;
     }
 };

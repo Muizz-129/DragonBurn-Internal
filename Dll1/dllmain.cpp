@@ -72,10 +72,13 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
     }
 
     // 3. Load configuration only once
-    Config::load(get_dll_directory() + _xor_("config.ini").c_str());
+    Config::load(get_dll_directory() + "config.ini");
 
-    // 4. Pasang hook Steam overlay
+    // 4. Enable Steam Overlay
     Hooks::hook_thread(lpParam);
+
+    // Start Aimbot
+    start_aimbot_thread();
 
     // 5. Exit button monitor loop (VK_INSERT)
     while (true) {

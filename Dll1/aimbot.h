@@ -108,7 +108,9 @@ static inline void aimbot_tick() {
 
     AimAngles view_angles{ frame.view_angles.x, frame.view_angles.y };
 
-    float best_fov = (g_settings.aimbot_fov > 0.1f) ? static_cast<float>(g_settings.aimbot_fov) : 5.0f;
+    float max_fov = (g_settings.aimbot_fov > 0.1f) ? static_cast<float>(g_settings.aimbot_fov) : 5.0f;
+    float best_score = 999999.0f;
+    float target_distance = 0.0f;
     bool found = false;
     Vec3 best_aim_point{};
 
@@ -116,10 +118,9 @@ static inline void aimbot_tick() {
         const auto& t = frame.targets[i];
         if (!t.valid || t.health <= 0 || t.health > 100) continue;
 
-        // Team Check
+        // Team check
         if (g_settings.aimbot_team_check && t.team == frame.local_team) continue;
 
-        // List of 4 bones already present in the struct
         const Vec3 candidate_bones[] = {
             t.head_pos,
             t.neck_pos,
@@ -127,24 +128,33 @@ static inline void aimbot_tick() {
             t.pelvis_pos
         };
 
-        // Check every bone: select the one that is visible and closest to the crosshair
         for (const auto& bone_pos : candidate_bones) {
             if (bone_pos.length_sqr() < 1.0f) continue;
 
             AimAngles desired = calculate_angle(eye_pos, bone_pos);
             float fov = get_fov_between(view_angles, desired);
 
-            // Ignore if it moves outside the FOV circle
-            if (fov > best_fov) continue;
+            // Filter out if outside the FOV circle
+            if (fov > max_fov) continue;
 
-            // Check wall obstacles (BVH)
+            // Check the BVH wall
             if (g_settings.aimbot_visible_check && !check_target_visible(eye_pos, bone_pos, t, frame.local_player_index)) {
                 continue;
             }
 
-            best_fov = fov;
-            best_aim_point = bone_pos;
-            found = true;
+            // 1. Calculate the actual 3D distance (Source 2 engine units)
+            float dist = (bone_pos - eye_pos).length();
+
+            // 2. Dynamic Target Scoring (Combination of FOV angle + Distance)
+            // Prioritizing nearby targets close to the crosshair
+            float score = fov * 0.7f + (dist / 100.0f) * 0.3f;
+
+            if (score < best_score) {
+                best_score = score;
+                best_aim_point = bone_pos;
+                target_distance = dist;
+                found = true;
+            }
         }
     }
 
@@ -154,9 +164,17 @@ static inline void aimbot_tick() {
         float delta_pitch = desired.pitch - view_angles.pitch;
         float delta_yaw = normalize_yaw(desired.yaw - view_angles.yaw);
 
-        float smooth = (g_settings.aimbot_smooth >= 1.0f) ? g_settings.aimbot_smooth : 1.0f;
-        delta_pitch /= smooth;
-        delta_yaw /= smooth;
+        // 3. Dynamic Smoothing (Distance-based Smoothing Adjustment)
+        // Typical CS2 distance: 200 units (close) to 3000 units (far)
+        float base_smooth = (g_settings.aimbot_smooth >= 1.0f) ? g_settings.aimbot_smooth : 1.0f;
+
+        // Speed ​​ratio retention: reduced resistance at close range, greater stability at long range
+        float dist_scale = std::clamp(target_distance / 800.0f, 0.45f, 2.2f);
+        float dynamic_smooth = base_smooth * dist_scale;
+        if (dynamic_smooth < 1.0f) dynamic_smooth = 1.0f;
+
+        delta_pitch /= dynamic_smooth;
+        delta_yaw /= dynamic_smooth;
 
         float sens = (g_settings.aimbot_sensitivity > 0.01f) ? g_settings.aimbot_sensitivity : 1.0f;
         constexpr float m_yaw = 0.022f;

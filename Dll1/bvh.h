@@ -588,7 +588,7 @@ inline void bvh::parse()
 	uintptr_t vphysics2_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("vphysics2.dll"));
 	if (!client_base || !vphysics2_base) return;
 
-	// 1. Cari Pointer World Global
+	// 1. Search for Pointer World Global
 	std::uintptr_t vphys2_world_global = 0;
 	const auto trace_call = bvh_mem::find_pattern(client_base, "E8 ? ? ? ? C7 87 ? ? ? ? ? ? ? ? 48 8D 54 24 ? 48 8B CF");
 	if (trace_call) {
@@ -612,7 +612,7 @@ inline void bvh::parse()
 	const auto vphys2_world = bvh_mem::read<std::uintptr_t>(vphys2_world_global);
 	if (!vphys2_world) return;
 
-	// 2. Imbas Resolusi Dinamik Fizik CS2
+	// 2. CS2 Physics Dynamic Resolution Scan
 	uintptr_t inner_world = 0;
 	uintptr_t body_array = 0;
 	int body_count = 0;
@@ -752,14 +752,20 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 	const auto inv_dist = 1.0f / max_dist;
 	const float dir[3]{ dx * inv_dist, dy * inv_dist, dz * inv_dist };
 	const float origin[3]{ start.x, start.y, start.z };
-	const float inv_dir[3]{ std::abs(dir[0]) > 1e-8f ? 1.0f / dir[0] : (dir[0] >= 0 ? 1e12f : -1e12f), std::abs(dir[1]) > 1e-8f ? 1.0f / dir[1] : (dir[1] >= 0 ? 1e12f : -1e12f), std::abs(dir[2]) > 1e-8f ? 1.0f / dir[2] : (dir[2] >= 0 ? 1e12f : -1e12f) };
+	const float inv_dir[3]{
+		std::abs(dir[0]) > 1e-8f ? 1.0f / dir[0] : (dir[0] >= 0 ? 1e12f : -1e12f),
+		std::abs(dir[1]) > 1e-8f ? 1.0f / dir[1] : (dir[1] >= 0 ? 1e12f : -1e12f),
+		std::abs(dir[2]) > 1e-8f ? 1.0f / dir[2] : (dir[2] >= 0 ? 1e12f : -1e12f)
+	};
 
 	auto closest_t = max_dist;
-	std::int32_t stack[128]{};
+
+	// Increase the stack size to 256 to avoid stack overflow on complex maps
+	std::int32_t stack[256]{};
 	std::int32_t sp{ 0 };
 	stack[0] = 0;
 
-	while (sp >= 0)
+	while (sp >= 0 && sp < 256)
 	{
 		const auto& node = this->m_nodes[stack[sp--]];
 		if (!node.bounds.intersects_ray(origin, inv_dir, closest_t)) continue;
@@ -816,7 +822,7 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 				}
 			}
 		}
-		else if (sp + 2 < 127)
+		else if (sp + 2 < 255)
 		{
 			stack[++sp] = node.right;
 			stack[++sp] = node.left;

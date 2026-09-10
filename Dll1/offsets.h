@@ -5,14 +5,14 @@
 struct Offsets {
     // client.dll Offsets
     struct {
-        uintptr_t dwEntityList               = 0x2571220;
-        uintptr_t dwViewMatrix               = 0x23CB830;
-        uintptr_t dwViewRender               = 0x23CB898;
-        uintptr_t dwLocalPlayerPawn          = 0x23C6268;
-        uintptr_t dwLocalPlayerController    = 0x23A0F30;
-        uintptr_t dwGlobalVars               = 0x20AF5F0;
-        uintptr_t dwPlantedC4                = 0x2390A18;
-        uintptr_t dwWeaponC4                 = 0x233EF10;
+        uintptr_t dwEntityList               = 0x2577BE0;
+        uintptr_t dwViewMatrix               = 0x23D21F0;
+        uintptr_t dwViewRender               = 0x23D2258;
+        uintptr_t dwLocalPlayerPawn          = 0x23CCC08;
+        uintptr_t dwLocalPlayerController    = 0x23A78D0;
+        uintptr_t dwGlobalVars               = 0x20B57C0;
+        uintptr_t dwPlantedC4                = 0x23973B8;
+        uintptr_t dwWeaponC4                 = 0x2345728;
     } client;                                
                                              
     // Entity & Pawn                         
@@ -35,7 +35,7 @@ struct Offsets {
     // Controllers                     
     struct {                           
         uintptr_t m_hPlayerPawn              = 0x914; // CHandle<C_CSPlayerPawn>
-        uintptr_t m_hPawn                    = 0x600; // CHandle<C_CSPlayerPawnBase>
+        uintptr_t m_hPawn                    = 0x6BC; // CHandle<C_CSPlayerPawnBase>
         uintptr_t m_sSanitizedPlayerName     = 0x868; // CUtlString
         uintptr_t m_hObserverPawn            = 0x918; // CHandle<C_CSObserverPawn>
         uintptr_t m_iObserverMode            = 0x48; // uint8
