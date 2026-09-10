@@ -63,11 +63,11 @@ static void cleanup_console() {
 DWORD WINAPI MainThread(LPVOID lpParam) {
     HMODULE hModule = reinterpret_cast<HMODULE>(lpParam);
 
-    // 1. Cipta konsol debug dan paparkan banner
+    // 1. Create a debug console and display a banner
     init_console();
     print_dragonburn_banner();
 
-    // 2. Tunggu sehingga client.dll dan gameoverlayrenderer64.dll sedia dimuatkan
+    // 2. Wait until client.dll and gameoverlayrenderer64.dll are ready to be loaded
     while (!GetModuleHandleA("client.dll") || !GetModuleHandleA("gameoverlayrenderer64.dll")) {
         Sleep(200);
     }
@@ -82,7 +82,7 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
     start_aimbot_thread();
     g_rcs.start();
 
-    // 5. Gelung pemantau butang keluar (VK_INSERT)
+    // 5. Exit button monitor loop (VK_INSERT)
     while (true) {
         if (g_settings.key_exit && (GetAsyncKeyState(g_settings.key_exit) & 0x8000)) {
             // Wait for the button to be released to avoid repeated triggering
