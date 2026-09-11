@@ -130,7 +130,6 @@ inline int scan_any_key(bool allow_mouse1 = true) {
         bool is_down = (GetAsyncKeyState(k) & 0x8000) != 0;
         bool was_down = prev_state[k];
         if (is_down && !was_down) {
-            // Update all prev_state before returning
             for (int j = 1; j < 256; ++j)
                 prev_state[j] = (GetAsyncKeyState(j) & 0x8000) != 0;
             return k;
