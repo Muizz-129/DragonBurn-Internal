@@ -266,7 +266,7 @@ static inline void aimbot_tick() {
         }
     }
     else {
-        // No enemy locked: allow RCS to fire freely at walls
+        // No enemy locked allow RCS to fire freely at walls
         g_rcs.set_aimbot_locked(false);
         aim_error_x = aim_error_y = 0.0f;
     }
