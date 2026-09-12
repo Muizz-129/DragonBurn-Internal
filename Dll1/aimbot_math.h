@@ -14,19 +14,33 @@ struct AimAngles {
 
 inline float clampf(float v, float lo, float hi)
 {
-    return std::fmax(lo, std::fmin(hi, v));
+    return std::clamp(v, lo, hi);
 }
 
 inline float normalize_yaw(float yaw)
 {
-    while (yaw > 180.0f)  yaw -= 360.0f;
-    while (yaw < -180.0f) yaw += 360.0f;
+    yaw = fmodf(yaw, 360.0f);
+    if (yaw > 180.0f)  yaw -= 360.0f;
+    if (yaw < -180.0f) yaw += 360.0f;
     return yaw;
 }
 
 inline float normalize_pitch(float pitch)
 {
     return clampf(pitch, -89.0f, 89.0f);
+}
+
+// Tukar sudut Euler kepada vektor unit hadapan untuk penapis kon pantas
+inline Vec3 angle_to_forward(const AimAngles& angles)
+{
+    float pitch_rad = angles.pitch * DEG2RAD;
+    float yaw_rad = angles.yaw * DEG2RAD;
+    float cp = cosf(pitch_rad);
+    return Vec3{
+        cp * cosf(yaw_rad),
+        cp * sinf(yaw_rad),
+        -sinf(pitch_rad)
+    };
 }
 
 inline AimAngles calculate_angle(const Vec3& src, const Vec3& dst)

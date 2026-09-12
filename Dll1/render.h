@@ -33,7 +33,6 @@ namespace Render {
         if (!pSwapChain || !g_pDevice) return;
 
         ID3D11Texture2D* pBackBuffer = nullptr;
-        // Use IID_PPV_ARGS and check SUCCEEDED to avoid memory errors
         HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&pBackBuffer));
         if (SUCCEEDED(hr) && pBackBuffer) {
             g_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
@@ -43,11 +42,8 @@ namespace Render {
 
     inline void cleanup_render_target() {
         if (g_pContext) {
-            // 1. Disconnect the render target from the GPU pipeline
             g_pContext->OMSetRenderTargets(0, nullptr, nullptr);
-            // 2.Clear all active states (shaders, buffers, samplers)
             g_pContext->ClearState();
-            // 3. Force the driver to process memory release right now
             g_pContext->Flush();
         }
 
@@ -127,125 +123,137 @@ namespace Render {
         if (is_in_game) {
             FrameState state = g_entity_reader.read_frame(screen_w, screen_h);
 
-            static std::string last_map = "";
-            if (state.map_name != last_map) {
-                if (!state.map_name.empty()) {
-                    std::thread([]() {
-                        g_bvh.clear();
-                        g_bvh.parse(); // Rescan the current physics triangle map into memory
-                        }).detach();
+            const bool map_ready = (state.local.pawn != 0 && !state.map_name.empty() && state.map_name != "<empty>");
+
+            if (map_ready) {
+                static std::string last_map = "";
+                static bool bvh_loading = false;
+
+                if (state.map_name != last_map) {
+                    if (!state.map_name.empty() && !bvh_loading) {
+                        bvh_loading = true;
+                        std::thread([map = state.map_name]() {
+                            Sleep(1500);
+                            g_bvh.clear();
+                            g_bvh.parse();
+                            bvh_loading = false;
+                            }).detach();
+                    }
+                    last_map = state.map_name;
                 }
-                last_map = state.map_name;
-            }
 
-            // Publish data for the Aimbot thread
-            AimbotFrame ab_frame{};
-            ab_frame.local_pawn = state.local.pawn;
-            ab_frame.local_team = state.local.team;
-            ab_frame.local_player_index = state.local_player_index;
-            ab_frame.screen_w = screen_w;
-            ab_frame.screen_h = screen_h;
-            ab_frame.camera_valid = state.local.camera.valid;
-            ab_frame.camera_fov = state.local.camera.fov;
-            ab_frame.eye_origin = state.local.camera.origin;
-            ab_frame.view_angles = state.local.camera.angles;
-            ab_frame.is_scoped = state.local.is_scoped;
-            ab_frame.local_weapon_def_index = state.local_weapon_def_index;
+                // Publish data for the Aimbot thread
+                AimbotFrame ab_frame{};
+                ab_frame.local_pawn = state.local.pawn;
+                ab_frame.local_team = state.local.team;
+                ab_frame.local_player_index = state.local_player_index;
+                ab_frame.screen_w = screen_w;
+                ab_frame.screen_h = screen_h;
+                ab_frame.camera_valid = state.local.camera.valid;
+                ab_frame.camera_fov = state.local.camera.fov;
+                ab_frame.eye_origin = state.local.camera.origin;
+                ab_frame.view_angles = state.local.camera.angles;
+                ab_frame.is_scoped = state.local.is_scoped;
+                ab_frame.local_weapon_def_index = state.local_weapon_def_index;
 
-            for (int i = 0; i < 64; i++) {
-                if (!state.players[i].valid) continue;
-                ab_frame.targets[i].valid = true;
-                ab_frame.targets[i].health = state.players[i].health;
-                ab_frame.targets[i].team = state.players[i].team;
-                ab_frame.targets[i].bSpottedByMask = state.players[i].bSpottedByMask;
-                ab_frame.targets[i].head_pos = (state.players[i].head_world.length_sqr() > 1.0f) ? state.players[i].head_world : state.players[i].bones_world[6];
-                ab_frame.targets[i].neck_pos = (state.players[i].neck_world.length_sqr() > 1.0f) ? state.players[i].neck_world : state.players[i].bones_world[5];
-                ab_frame.targets[i].chest_pos = (state.players[i].chest_world.length_sqr() > 1.0f) ? state.players[i].chest_world : state.players[i].bones_world[4];
-                ab_frame.targets[i].pelvis_pos = (state.players[i].pelvis_world.length_sqr() > 1.0f) ? state.players[i].pelvis_world : state.players[i].bones_world[0];
-            }
-            g_aimbot_data.publish(ab_frame);
-
-            if (g_settings.master_switch) {
-                // Projectile Trails
-                g_projectile_trails.set_view_matrix(state.view_matrix);
-                g_projectile_trails.update_and_draw(draw, state.entity_list, screen_w, screen_h);
-
-                // Player ESP
                 for (int i = 0; i < 64; i++) {
-                    auto& p = state.players[i];
-                    if (!p.valid) continue;
+                    if (!state.players[i].valid) continue;
+                    ab_frame.targets[i].valid = true;
+                    ab_frame.targets[i].health = state.players[i].health;
+                    ab_frame.targets[i].team = state.players[i].team;
+                    ab_frame.targets[i].bSpottedByMask = state.players[i].bSpottedByMask;
+                    ab_frame.targets[i].is_visible = state.players[i].is_local_spotted;
+                    ab_frame.targets[i].head_pos = (state.players[i].head_world.length_sqr() > 1.0f) ? state.players[i].head_world : state.players[i].bones_world[6];
+                    ab_frame.targets[i].neck_pos = (state.players[i].neck_world.length_sqr() > 1.0f) ? state.players[i].neck_world : state.players[i].bones_world[5];
+                    ab_frame.targets[i].chest_pos = (state.players[i].chest_world.length_sqr() > 1.0f) ? state.players[i].chest_world : state.players[i].bones_world[4];
+                    ab_frame.targets[i].pelvis_pos = (state.players[i].pelvis_world.length_sqr() > 1.0f) ? state.players[i].pelvis_world : state.players[i].bones_world[0];
+                }
+                g_aimbot_data.publish(ab_frame);
 
-                    for (int b = 0; b < MAX_BONE; b++) {
-                        p.visible[b] = w2s_depth(p.bones_world[b], state.view_matrix, screen_w, screen_h, p.screens[b], p.depths[b]);
+                g_rcs.update_weapon_state(state.local_weapon_def_index, g_settings.aimbot_sensitivity);
+
+                if (g_settings.master_switch) {
+                    // Projectile Trails
+                    g_projectile_trails.set_view_matrix(state.view_matrix);
+                    g_projectile_trails.update_and_draw(draw, state.entity_list, screen_w, screen_h);
+
+                    // Player ESP
+                    for (int i = 0; i < 64; i++) {
+                        auto& p = state.players[i];
+                        if (!p.valid) continue;
+
+                        for (int b = 0; b < MAX_BONE; b++) {
+                            p.visible[b] = w2s_depth(p.bones_world[b], state.view_matrix, screen_w, screen_h, p.screens[b], p.depths[b]);
+                        }
+
+                        static auto last_ray_dbg = std::chrono::steady_clock::now();
+                        if (p.team != state.local.team && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_ray_dbg).count() >= 500) {
+                            Vec3 eye = (state.local.camera.valid && state.local.camera.origin.length_sqr() > 1.0f)
+                                ? state.local.camera.origin
+                                : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
+                        }
+
+                        g_esp.draw_player(draw, p, state.local.team, screen_w, screen_h, i, state.local.is_scoped);
                     }
 
-                    static auto last_ray_dbg = std::chrono::steady_clock::now();
-                    if (p.team != state.local.team && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - last_ray_dbg).count() >= 500) {
-                        Vec3 eye = (state.local.camera.valid && state.local.camera.origin.length_sqr() > 1.0f)
-                            ? state.local.camera.origin
-                            : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
+                    // C4 & Bomb Timer
+                    PlantedC4State c4 = read_planted_c4();
+                    if (c4.valid) {
+                        draw_c4_esp(draw, c4, screen_w, screen_h, state.view_matrix);
+                        draw_bomb_timer(c4);
                     }
 
-                    g_esp.draw_player(draw, p, state.local.team, screen_w, screen_h, i, state.local.is_scoped);
-                }
+                    DroppedC4State dropped_c4 = read_dropped_c4(c4.valid);
+                    if (dropped_c4.valid) {
+                        draw_dropped_c4_esp(draw, dropped_c4, screen_w, screen_h, state.view_matrix);
+                    }
 
-                // C4 & Bomb Timer
-                PlantedC4State c4 = read_planted_c4();
-                if (c4.valid) {
-                    draw_c4_esp(draw, c4, screen_w, screen_h, state.view_matrix);
-                    draw_bomb_timer(c4);
-                }
+                    // Spectator List
+                    if (state.local.pawn) {
+                        g_spectators.update(state.entity_list, state.local.pawn, state.local.controller);
+                        g_spectators.draw(screen_w);
+                    }
 
-                DroppedC4State dropped_c4 = read_dropped_c4(c4.valid);
-                if (dropped_c4.valid) {
-                    draw_dropped_c4_esp(draw, dropped_c4, screen_w, screen_h, state.view_matrix);
-                }
+                    // Crosshair
+                    if (g_settings.crosshair_enabled) {
+                        Crosshair::Config cc{};
+                        cc.enabled = g_settings.crosshair_enabled;
+                        cc.shape = g_settings.crosshair_shape;
+                        cc.size = g_settings.crosshair_size;
+                        cc.gap = g_settings.crosshair_gap;
+                        cc.thickness = g_settings.crosshair_thickness;
+                        cc.color = float4_to_col(g_settings.crosshair_color);
+                        cc.outline = g_settings.crosshair_outline;
+                        cc.outline_thickness = g_settings.crosshair_outline_thickness;
+                        cc.outline_color = float4_to_col(g_settings.crosshair_outline_color);
+                        cc.dot = g_settings.crosshair_dot;
+                        cc.dot_size = g_settings.crosshair_dot_size;
+                        g_crosshair.draw(draw, screen_w, screen_h, cc);
+                    }
 
-                // Spectator List
-                if (state.local.pawn) {
-                    g_spectators.update(state.entity_list, state.local.pawn, state.local.controller);
-                    g_spectators.draw(screen_w);
-                }
+                    // FOV Circle
+                    if (g_settings.aimbot_enabled && g_settings.draw_aimbot_fov && state.local.pawn) {
+                        float cam_fov = (state.local.camera.valid && state.local.camera.fov > 0.0f) ? state.local.camera.fov : 90.0f;
+                        float rad_aim = (g_settings.aimbot_fov * 0.5f) * (3.14159265f / 180.0f);
+                        float rad_cam = (cam_fov * 0.5f) * (3.14159265f / 180.0f);
+                        float fov_radius = (tanf(rad_aim) / tanf(rad_cam)) * (screen_w * 0.5f);
 
-                // Crosshair
-                if (g_settings.crosshair_enabled) {
-                    Crosshair::Config cc{};
-                    cc.enabled = g_settings.crosshair_enabled;
-                    cc.shape = g_settings.crosshair_shape;
-                    cc.size = g_settings.crosshair_size;
-                    cc.gap = g_settings.crosshair_gap;
-                    cc.thickness = g_settings.crosshair_thickness;
-                    cc.color = float4_to_col(g_settings.crosshair_color);
-                    cc.outline = g_settings.crosshair_outline;
-                    cc.outline_thickness = g_settings.crosshair_outline_thickness;
-                    cc.outline_color = float4_to_col(g_settings.crosshair_outline_color);
-                    cc.dot = g_settings.crosshair_dot;
-                    cc.dot_size = g_settings.crosshair_dot_size;
-                    g_crosshair.draw(draw, screen_w, screen_h, cc);
-                }
+                        ImVec2 center = ImVec2((float)screen_w * 0.5f, (float)screen_h * 0.5f);
+                        draw->AddCircle(center, fov_radius, float4_to_col(g_settings.aimbot_fov_color), 64, 1.2f);
+                    }
 
-                // FOV Circle
-                if (g_settings.aimbot_enabled && g_settings.draw_aimbot_fov && state.local.pawn) {
-                    float cam_fov = (state.local.camera.valid && state.local.camera.fov > 0.0f) ? state.local.camera.fov : 90.0f;
-                    float rad_aim = (g_settings.aimbot_fov * 0.5f) * (3.14159265f / 180.0f);
-                    float rad_cam = (cam_fov * 0.5f) * (3.14159265f / 180.0f);
-                    float fov_radius = (tanf(rad_aim) / tanf(rad_cam)) * (screen_w * 0.5f);
-
-                    ImVec2 center = ImVec2((float)screen_w * 0.5f, (float)screen_h * 0.5f);
-                    draw->AddCircle(center, fov_radius, float4_to_col(g_settings.aimbot_fov_color), 64, 1.2f);
-                }
-
-                // Grenade Helper
-                g_grenades.update_held_weapon(state.local_weapon_def_index);
-                if (g_settings.grenade_helper_enabled && state.local.pawn) {
-                    g_grenades.set_view_matrix(state.view_matrix);
-                    g_grenades.update(state.local.x, state.local.y, state.local.z,
-                        state.local.camera.angles.x, state.local.camera.angles.y,
-                        state.map_name);
-                    g_grenades.draw(draw, state.local.x, state.local.y, state.local.z, screen_w, screen_h);
-                }
-            }
-        }
+                    // Grenade Helper
+                    g_grenades.update_held_weapon(state.local_weapon_def_index);
+                    if (g_settings.grenade_helper_enabled && state.local.pawn) {
+                        g_grenades.set_view_matrix(state.view_matrix);
+                        g_grenades.update(state.local.x, state.local.y, state.local.z,
+                            state.local.camera.angles.x, state.local.camera.angles.y,
+                            state.map_name);
+                        g_grenades.draw(draw, state.local.x, state.local.y, state.local.z, screen_w, screen_h);
+                    }
+                } // tutup if (g_settings.master_switch)
+            } // tutup if (map_ready)
+        } // tutup if (is_in_game)
 
         g_grenades.render_popups();
 
@@ -267,18 +275,13 @@ namespace Render {
     inline void shutdown() {
         if (!g_Init) return;
 
-        // Restore the original WindowProc input function.
         Input::unhook();
-
-        // Clear Render Target View
         cleanup_render_target();
 
-        // Clean up the ImGui backend
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
 
-        // Release the DirectX device if held
         if (g_pContext) {
             g_pContext->Release();
             g_pContext = nullptr;

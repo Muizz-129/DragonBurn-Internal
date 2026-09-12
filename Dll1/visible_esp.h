@@ -34,7 +34,7 @@ public:
         }
 
         float avg_depth = 0.0f;
-        int   depth_cnt = 0;
+        int depth_cnt = 0;
         static constexpr int CENTER_BONES[] = {
             BONE_HEAD, BONE_NECK, BONE_SPINE1, BONE_SPINE2, BONE_PELVIS
         };
@@ -42,7 +42,7 @@ public:
             if (p.visible[b]) { avg_depth += p.depths[b]; depth_cnt++; }
         }
         float opacity = 1.0f;
-        if (depth_cnt > 0) opacity = esp_depth_opacity(avg_depth / depth_cnt);
+        if (depth_cnt > 0) opacity = esp_depth_opacity(avg_depth / static_cast<float>(depth_cnt));
 
         if (g_settings.esp_use_theme) {
             EspTheme::apply(enemy);
@@ -80,15 +80,20 @@ private:
         }
         if (cnt < 3) return;
 
-        float avg_depth = 0;
-        int depth_cnt = 0;
+        // Gelung tunggal: Satukan kiraan kedalaman dan koordinat tengah X sekali gus
+        float avg_depth = 0.0f;
+        float center_x = 0.0f;
+        int center_cnt = 0;
         for (int b : {BONE_HEAD, BONE_NECK, BONE_SPINE1, BONE_PELVIS}) {
             if (!p.visible[b]) continue;
             avg_depth += p.depths[b];
-            depth_cnt++;
+            center_x += p.screens[b].x;
+            center_cnt++;
         }
-        if (depth_cnt == 0) return;
-        avg_depth /= depth_cnt;
+        if (center_cnt == 0) return;
+
+        avg_depth /= static_cast<float>(center_cnt);
+        center_x /= static_cast<float>(center_cnt);
 
         ImFont* font = fonts::regular() ? fonts::regular() : ImGui::GetFont();
         if (!font) return;
@@ -97,24 +102,16 @@ private:
         ImU32 col = IM_COL32(255, 165, 0, 230);
         const char* label = "C4";
 
-        float head_extra = g_settings.head_radius * g_settings.depth_scale / avg_depth;
-        top -= (head_extra + g_settings.box_padding_y * g_settings.depth_scale / avg_depth);
+        float inv_depth = 1.0f / (std::max)(avg_depth, 0.1f);
+        float head_extra = g_settings.head_radius * g_settings.depth_scale * inv_depth;
+        top -= (head_extra + g_settings.box_padding_y * g_settings.depth_scale * inv_depth);
         top -= fs - 2.f;
 
         ImVec2 ts = font->CalcTextSizeA(fs, FLT_MAX, 0.0f, label);
-        float center_x = 0;
-        int cx_cnt = 0;
-        for (int b : {BONE_HEAD, BONE_NECK, BONE_SPINE1, BONE_PELVIS}) {
-            if (!p.visible[b]) continue;
-            center_x += p.screens[b].x;
-            cx_cnt++;
-        }
-        if (cx_cnt == 0) return;
-        center_x /= cx_cnt;
-
         float lx = floorf(center_x - ts.x * 0.5f);
         float ly = floorf(top);
         ImU32 shadow = IM_COL32(0, 0, 0, 200);
+
         draw->AddText(font, fs, { lx - 1, ly - 1 }, shadow, label);
         draw->AddText(font, fs, { lx + 1, ly - 1 }, shadow, label);
         draw->AddText(font, fs, { lx - 1, ly + 1 }, shadow, label);

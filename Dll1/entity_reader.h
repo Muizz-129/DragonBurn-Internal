@@ -145,14 +145,8 @@ public:
                     cached_map_scale = get_map_scale(map_name);
                     cached_map_ptr = current_map_ptr;
                     cached_map_name = map_name;
-
                     std::cout << "[GAME] Map exchange detected: " << map_name << std::endl;
-
-                    std::thread([]() {
-                        g_bvh.clear();
-                        g_bvh.parse();
-                        std::cout << "[+] [BVH] Finished scanning the map's physics data into memory." << std::endl;
-                        }).detach();
+                    // JANGAN letak std::thread g_bvh.parse() di sini lagi!
                 }
             }
         }
@@ -431,36 +425,33 @@ private:
             + g_offsets.EntitySpottedState_t.m_bSpotted);
         player.m_bSpotted = is_spotted_ingame;
 
-        // BVH Trace
+        // BVH Trace - Versi Ringan (Jimat 85% Beban CPU)
         {
             bool traced = false;
-            static constexpr int BONES_TO_TRACE[] = {
-                BONE_HEAD, BONE_NECK, BONE_SPINE1, BONE_SPINE2, BONE_PELVIS,
-                BONE_LSHOULDER, BONE_LELBOW, BONE_LHAND,
-                BONE_RSHOULDER, BONE_RELBOW, BONE_RHAND,
-                BONE_LHIP, BONE_LKNEE, BONE_LFOOT,
-                BONE_RHIP, BONE_RKNEE, BONE_RFOOT,
-            };
 
-            // Make sure cam_eye has a valid value, if (0,0,0) use pawn coordinates + eye height
             Vec3 cam_eye = (state.local.camera.valid && state.local.camera.origin.length_sqr() > 1.0f)
                 ? state.local.camera.origin
                 : Vec3{ state.local.x, state.local.y, state.local.z + 64.0f };
 
             if (g_bvh.valid() && g_bvh.count() > 0 && (state.local.camera.valid || state.local.pawn)) {
-                int occluded_bones = 0;
-                for (int b : BONES_TO_TRACE) {
-                    auto tr = g_bvh.trace_ray(cam_eye, bone_buf[b].pos);
-                    player.bone_occluded[b] = tr.hit && (tr.fraction <= 0.97f);
-                    if (player.bone_occluded[b]) {
-                        occluded_bones++;
+                // 1. Cuma imbas KEPALA dan DADA sahaja
+                bool head_occluded = g_bvh.is_occluded(cam_eye, bone_buf[BONE_HEAD].pos, 0.97f);
+                bool chest_occluded = g_bvh.is_occluded(cam_eye, bone_buf[BONE_CHEST].pos, 0.97f);
+
+                bool is_visible = (!head_occluded || !chest_occluded);
+                player.is_local_spotted = is_visible;
+
+                player.bone_occluded[BONE_HEAD] = head_occluded;
+                player.bone_occluded[BONE_NECK] = head_occluded;
+                player.bone_occluded[BONE_CHEST] = chest_occluded;
+                player.bone_occluded[BONE_PELVIS] = chest_occluded;
+
+                for (int b = 0; b < MAX_BONE; b++) {
+                    if (b != BONE_HEAD && b != BONE_NECK && b != BONE_CHEST && b != BONE_PELVIS) {
+                        player.bone_occluded[b] = !is_visible;
                     }
                 }
                 traced = true;
-
-                // An enemy is only considered "spotted" if their head, neck, or chest is NOT obstructed by a wall
-                bool core_visible = !player.bone_occluded[BONE_HEAD] || !player.bone_occluded[BONE_CHEST] || !player.bone_occluded[BONE_PELVIS];
-                player.is_local_spotted = core_visible;
             }
 
             if (!traced) {

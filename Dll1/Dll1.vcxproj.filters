@@ -129,9 +129,6 @@
     <ClInclude Include="fontello_data.h">
       <Filter>font</Filter>
     </ClInclude>
-    <ClInclude Include="chams_renderer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="box_renderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -219,11 +216,11 @@
     <ClInclude Include="patterns.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="chams_renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\helpers\fonts.cpp">
       <Filter>helpers</Filter>
     </ClCompile>
@@ -265,6 +262,9 @@
     </ClCompile>
     <ClCompile Include="..\ui\draw\fx.cpp">
       <Filter>ui\draw</Filter>
+    </ClCompile>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

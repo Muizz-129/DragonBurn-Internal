@@ -1,4 +1,4 @@
-#include <Windows.h>
+﻿#include <Windows.h>
 #include <iostream>
 #include <cstdio>
 #include "hooks.h"
@@ -10,8 +10,8 @@
 #include "settings.h"
 
 // ASCII color (24-bit TrueColor)
-#define C_MINT   "\033[38;2;0;255;180m"  // ASCII front page (Neon Mint)
-#define C_SHADOW "\033[38;2;65;70;85m"   // Background shadow (Dark Charcoal)
+#define C_MINT   "\033[38;2;0;255;180m"
+#define C_SHADOW "\033[38;2;65;70;85m"
 #define C_MUTED  "\033[38;2;120;125;140m"
 #define C_GREEN  "\033[38;2;0;255;128m"
 #define C_RED    "\033[38;2;255;70;70m"
@@ -29,12 +29,30 @@ static void init_console() {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    // Enable ANSI escape sequences for TrueColor and shadow processing
+    // 1. Output: Hidupkan TrueColor & tetapkan buffer 3000 baris untuk scroll
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD dwMode = 0;
-    if (GetConsoleMode(hOut, &dwMode)) {
-        dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        SetConsoleMode(hOut, dwMode);
+    DWORD dwOutMode = 0;
+    if (GetConsoleMode(hOut, &dwOutMode)) {
+        dwOutMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(hOut, dwOutMode);
+    }
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo(hOut, &csbi)) {
+        COORD newSize;
+        newSize.X = csbi.dwSize.X;
+        newSize.Y = 3000; // Ruang scroll ke atas
+        SetConsoleScreenBufferSize(hOut, newSize);
+    }
+
+    // 2. Input: Matikan QuickEdit Mode supaya konsol TIDAK BEKU bila diklik
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD dwInMode = 0;
+    if (GetConsoleMode(hIn, &dwInMode)) {
+        // Wajib sertakan ENABLE_EXTENDED_FLAGS bila ubah QUICK_EDIT_MODE
+        dwInMode &= ~ENABLE_QUICK_EDIT_MODE;
+        dwInMode |= ENABLE_EXTENDED_FLAGS;
+        SetConsoleMode(hIn, dwInMode);
     }
 }
 
@@ -63,29 +81,28 @@ static void cleanup_console() {
 DWORD WINAPI MainThread(LPVOID lpParam) {
     HMODULE hModule = reinterpret_cast<HMODULE>(lpParam);
 
-    // 1. Create a debug console and display a banner
+    // 1. Cipta konsol debug dan paparkan banner
     init_console();
     print_dragonburn_banner();
 
-    // 2. Wait until client.dll and gameoverlayrenderer64.dll are ready to be loaded
+    // 2. Tunggu sehingga client.dll dan gameoverlayrenderer64.dll sedia
     while (!GetModuleHandleA("client.dll") || !GetModuleHandleA("gameoverlayrenderer64.dll")) {
         Sleep(200);
     }
 
-    // 3. Load configuration
+    // 3. Muat konfigurasi
     Config::load(get_dll_directory() + "config.ini");
 
-    // 4. Hook the Steam Overlay
+    // 4. Hook Steam Overlay (DirectX Render)
     Hooks::hook_thread(lpParam);
 
-    // Start the Aimbot and RCS threads
+    // 5. Mulakan thread Aimbot (dwViewAngles) dan RCS
     start_aimbot_thread();
     g_rcs.start();
 
-    // 5. Exit button monitor loop (VK_INSERT)
+    // 6. Gelung pemantau butang keluar (VK_INSERT)
     while (true) {
         if (g_settings.key_exit && (GetAsyncKeyState(g_settings.key_exit) & 0x8000)) {
-            // Wait for the button to be released to avoid repeated triggering
             while (GetAsyncKeyState(g_settings.key_exit) & 0x8000) {
                 Sleep(10);
             }
@@ -94,23 +111,20 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
         Sleep(100);
     }
 
-    // 6. Cleaning routine before DLL exit (Must follow this sequence)
+    // 7. Urutan pembersihan sebelum DLL dikeluarkan
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Stopping background threads...\n";
     stop_aimbot_thread();
     g_rcs.stop();
 
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Restoring Steam Overlay pointers...\n";
-    Hooks::unhook(); // Restore original Steam pointer
-
-    // Allow some time for the current frame rendering call to complete
-    Sleep(150);
+    Hooks::unhook();
 
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Cleaning up ImGui and DirectX resources...\n";
-    Render::shutdown(); //Clean up ImGui, the WindowProc hook, and D3D resources
+    Render::shutdown();
 
+    Sleep(250);
     cleanup_console();
 
-    // Unload the DLL from CS2 memory and terminate the thread
     FreeLibraryAndExitThread(hModule, 0);
     return 0;
 }

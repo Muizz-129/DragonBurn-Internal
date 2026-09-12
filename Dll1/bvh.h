@@ -206,6 +206,7 @@ public:
 	void clear();
 
 	[[nodiscard]] trace_result trace_ray(const Vec3& start, const Vec3& end, std::int32_t exclude_tri = -1) const;
+	[[nodiscard]] bool is_occluded(const Vec3& start, const Vec3& end, float max_fraction = 0.97f) const;
 	[[nodiscard]] std::vector<hit_entry> trace_ray_all(const Vec3& start, const Vec3& end) const;
 	[[nodiscard]] std::vector<penetration_segment> build_segments(const std::vector<hit_entry>& hits, float ray_length) const;
 
@@ -274,7 +275,7 @@ struct hedge_t
 struct quat_t { float x, y, z, w; };
 struct mat3_t { float m[3][3]; };
 
-static mat3_t quat_to_matrix(const quat_t& q)
+static inline mat3_t quat_to_matrix(const quat_t& q)
 {
 	const auto xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
 	const auto xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
@@ -293,7 +294,7 @@ static mat3_t quat_to_matrix(const quat_t& q)
 	return m;
 }
 
-static Vec3 rotate_point(const mat3_t& m, const Vec3& v)
+static inline Vec3 rotate_point(const mat3_t& m, const Vec3& v)
 {
 	return
 	{
@@ -303,7 +304,7 @@ static Vec3 rotate_point(const mat3_t& m, const Vec3& v)
 	};
 }
 
-static Vec3 transform_point(const mat3_t& rot, const float scale[3], const float pos[3], const Vec3& local)
+static inline Vec3 transform_point(const mat3_t& rot, const float scale[3], const float pos[3], const Vec3& local)
 {
 	const auto scaled = Vec3{ local.x * scale[0], local.y * scale[1], local.z * scale[2] };
 	const auto rotated = rotate_point(rot, scaled);
@@ -319,6 +320,7 @@ static bool extract_mesh(std::uintptr_t bvh_ptr, std::uintptr_t vert_ptr, std::u
 
 	std::uint32_t min_tri = UINT32_MAX, max_tri = 0;
 	std::vector<std::pair<std::uint32_t, std::uint32_t>> ranges;
+	ranges.reserve(1024);
 	std::vector<std::uint32_t> stack;
 	stack.reserve(256);
 
@@ -467,7 +469,7 @@ static bool extract_hull(std::uintptr_t hull_data, float uniform_scale, const bv
 		if (start_he >= hedge_count) continue;
 
 		std::vector<int> face_verts;
-		face_verts.reserve(8);
+		face_verts.reserve(16);
 
 		auto he = start_he;
 		auto safety{ 0 };
@@ -566,29 +568,12 @@ static void process_shape(std::uintptr_t shape_body, std::uintptr_t hull_vtable,
 	}
 }
 
-struct BVHDebugInfo {
-	int step = 0;
-	const char* status = "Idle";
-	uintptr_t client_base = 0;
-	uintptr_t vphys2_base = 0;
-	uintptr_t world_global = 0;
-	uintptr_t world = 0;
-	uintptr_t inner_world = 0;
-	uintptr_t body_array = 0;
-	int body_count = 0;
-	bool found_hull_vt = false;
-	bool found_mesh_vt = false;
-	int bodies_processed = 0;
-};
-inline BVHDebugInfo g_bvh_dbg;
-
 inline void bvh::parse()
 {
 	uintptr_t client_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("client.dll"));
 	uintptr_t vphysics2_base = reinterpret_cast<uintptr_t>(GetModuleHandleA("vphysics2.dll"));
 	if (!client_base || !vphysics2_base) return;
 
-	// 1. Search for Pointer World Global
 	std::uintptr_t vphys2_world_global = 0;
 	const auto trace_call = bvh_mem::find_pattern(client_base, "E8 ? ? ? ? C7 87 ? ? ? ? ? ? ? ? 48 8D 54 24 ? 48 8B CF");
 	if (trace_call) {
@@ -612,7 +597,6 @@ inline void bvh::parse()
 	const auto vphys2_world = bvh_mem::read<std::uintptr_t>(vphys2_world_global);
 	if (!vphys2_world) return;
 
-	// 2. CS2 Physics Dynamic Resolution Scan
 	uintptr_t inner_world = 0;
 	uintptr_t body_array = 0;
 	int body_count = 0;
@@ -704,6 +688,7 @@ inline void bvh::parse()
 			}
 
 			std::unordered_set<std::uintptr_t> seen;
+			seen.reserve(leaves.size());
 			for (const auto shape : leaves) {
 				if (seen.count(shape)) continue;
 				seen.insert(shape);
@@ -753,19 +738,19 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 	const float dir[3]{ dx * inv_dist, dy * inv_dist, dz * inv_dist };
 	const float origin[3]{ start.x, start.y, start.z };
 	const float inv_dir[3]{
-		std::abs(dir[0]) > 1e-8f ? 1.0f / dir[0] : (dir[0] >= 0 ? 1e12f : -1e12f),
-		std::abs(dir[1]) > 1e-8f ? 1.0f / dir[1] : (dir[1] >= 0 ? 1e12f : -1e12f),
-		std::abs(dir[2]) > 1e-8f ? 1.0f / dir[2] : (dir[2] >= 0 ? 1e12f : -1e12f)
+		1.0f / (std::abs(dir[0]) > 1e-8f ? dir[0] : (dir[0] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[1]) > 1e-8f ? dir[1] : (dir[1] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[2]) > 1e-8f ? dir[2] : (dir[2] < 0.0f ? -1e-8f : 1e-8f))
 	};
 
 	auto closest_t = max_dist;
+	std::int32_t best_ti = -1;
 
-	// Increase the stack size to 256 to avoid stack overflow on complex maps
 	std::int32_t stack[256]{};
 	std::int32_t sp{ 0 };
 	stack[0] = 0;
 
-	while (sp >= 0 && sp < 256)
+	while (sp >= 0)
 	{
 		const auto& node = this->m_nodes[stack[sp--]];
 		if (!node.bounds.intersects_ray(origin, inv_dir, closest_t)) continue;
@@ -803,22 +788,7 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 				if (t > 1e-5f && t < closest_t)
 				{
 					closest_t = t;
-					result.hit = true;
-					result.fraction = t / max_dist;
-					result.distance = t;
-					result.triangle_index = ti;
-					result.surface = tri.surface;
-					result.end_pos = { origin[0] + dir[0] * t, origin[1] + dir[1] * t, origin[2] + dir[2] * t };
-
-					const auto nx = e1y * e2z - e1z * e2y;
-					const auto ny = e1z * e2x - e1x * e2z;
-					const auto nz = e1x * e2y - e1y * e2x;
-					const auto nl = std::sqrt(nx * nx + ny * ny + nz * nz);
-					if (nl > 1e-8f)
-					{
-						const auto inv_nl = 1.0f / nl;
-						result.normal = { nx * inv_nl, ny * inv_nl, nz * inv_nl };
-					}
+					best_ti = ti;
 				}
 			}
 		}
@@ -829,7 +799,104 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 		}
 	}
 
+	// Kira normal dan koordinat titik sentuh sekali sahaja pada akhir fungsi
+	if (best_ti != -1)
+	{
+		const auto& tri = this->m_triangles[best_ti];
+		result.hit = true;
+		result.fraction = closest_t / max_dist;
+		result.distance = closest_t;
+		result.triangle_index = best_ti;
+		result.surface = tri.surface;
+		result.end_pos = { origin[0] + dir[0] * closest_t, origin[1] + dir[1] * closest_t, origin[2] + dir[2] * closest_t };
+
+		const auto e1x = tri.v1.x - tri.v0.x, e1y = tri.v1.y - tri.v0.y, e1z = tri.v1.z - tri.v0.z;
+		const auto e2x = tri.v2.x - tri.v0.x, e2y = tri.v2.y - tri.v0.y, e2z = tri.v2.z - tri.v0.z;
+		const auto nx = e1y * e2z - e1z * e2y;
+		const auto ny = e1z * e2x - e1x * e2z;
+		const auto nz = e1x * e2y - e1y * e2x;
+		const auto nl = std::sqrt(nx * nx + ny * ny + nz * nz);
+		if (nl > 1e-8f)
+		{
+			const auto inv_nl = 1.0f / nl;
+			result.normal = { nx * inv_nl, ny * inv_nl, nz * inv_nl };
+		}
+	}
+
 	return result;
+}
+
+// Semakan keterlihatan ultra-laju: Keluar serta-merta pada segitiga halangan pertama
+inline bool bvh::is_occluded(const Vec3& start, const Vec3& end, float max_fraction) const
+{
+	std::shared_lock lock(this->m_mutex);
+	if (this->m_nodes.empty() || this->m_triangles.empty()) return false;
+
+	const auto dx = end.x - start.x;
+	const auto dy = end.y - start.y;
+	const auto dz = end.z - start.z;
+	const auto max_dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+	if (max_dist < 1e-8f) return false;
+
+	const auto inv_dist = 1.0f / max_dist;
+	const float dir[3]{ dx * inv_dist, dy * inv_dist, dz * inv_dist };
+	const float origin[3]{ start.x, start.y, start.z };
+	const float inv_dir[3]{
+		1.0f / (std::abs(dir[0]) > 1e-8f ? dir[0] : (dir[0] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[1]) > 1e-8f ? dir[1] : (dir[1] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[2]) > 1e-8f ? dir[2] : (dir[2] < 0.0f ? -1e-8f : 1e-8f))
+	};
+
+	const float cut_dist = max_dist * max_fraction;
+	std::int32_t stack[256]{};
+	std::int32_t sp{ 0 };
+	stack[0] = 0;
+
+	while (sp >= 0)
+	{
+		const auto& node = this->m_nodes[stack[sp--]];
+		if (!node.bounds.intersects_ray(origin, inv_dir, cut_dist)) continue;
+
+		if (node.left == -1)
+		{
+			for (std::int32_t i = node.tri_start; i < node.tri_start + node.tri_count; ++i)
+			{
+				const auto& tri = this->m_triangles[this->m_indices[i]];
+
+				const auto e1x = tri.v1.x - tri.v0.x, e1y = tri.v1.y - tri.v0.y, e1z = tri.v1.z - tri.v0.z;
+				const auto e2x = tri.v2.x - tri.v0.x, e2y = tri.v2.y - tri.v0.y, e2z = tri.v2.z - tri.v0.z;
+
+				const auto hx = dir[1] * e2z - dir[2] * e2y;
+				const auto hy = dir[2] * e2x - dir[0] * e2z;
+				const auto hz = dir[0] * e2y - dir[1] * e2x;
+				const auto a = e1x * hx + e1y * hy + e1z * hz;
+
+				if (a > -1e-8f && a < 1e-8f) continue;
+
+				const auto f = 1.0f / a;
+				const auto sx = origin[0] - tri.v0.x, sy = origin[1] - tri.v0.y, sz = origin[2] - tri.v0.z;
+				const auto u = f * (sx * hx + sy * hy + sz * hz);
+				if (u < 0.0f || u > 1.0f) continue;
+
+				const auto qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+				const auto v = f * (dir[0] * qx + dir[1] * qy + dir[2] * qz);
+				if (v < 0.0f || u + v > 1.0f) continue;
+
+				const auto t = f * (e2x * qx + e2y * qy + e2z * qz);
+				if (t > 1e-5f && t <= cut_dist)
+				{
+					return true; // Dinding dikesan, keluar terus tanpa proses baki nod
+				}
+			}
+		}
+		else if (sp + 2 < 255)
+		{
+			stack[++sp] = node.right;
+			stack[++sp] = node.left;
+		}
+	}
+
+	return false;
 }
 
 inline std::vector<bvh::hit_entry> bvh::trace_ray_all(const Vec3& start, const Vec3& end) const
@@ -846,7 +913,11 @@ inline std::vector<bvh::hit_entry> bvh::trace_ray_all(const Vec3& start, const V
 	const auto inv_dist = 1.0f / max_dist;
 	const float dir[3]{ dx * inv_dist, dy * inv_dist, dz * inv_dist };
 	const float origin[3]{ start.x, start.y, start.z };
-	const float inv_dir[3]{ std::abs(dir[0]) > 1e-8f ? 1.0f / dir[0] : (dir[0] >= 0 ? 1e12f : -1e12f), std::abs(dir[1]) > 1e-8f ? 1.0f / dir[1] : (dir[1] >= 0 ? 1e12f : -1e12f), std::abs(dir[2]) > 1e-8f ? 1.0f / dir[2] : (dir[2] >= 0 ? 1e12f : -1e12f) };
+	const float inv_dir[3]{
+		1.0f / (std::abs(dir[0]) > 1e-8f ? dir[0] : (dir[0] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[1]) > 1e-8f ? dir[1] : (dir[1] < 0.0f ? -1e-8f : 1e-8f)),
+		1.0f / (std::abs(dir[2]) > 1e-8f ? dir[2] : (dir[2] < 0.0f ? -1e-8f : 1e-8f))
+	};
 
 	std::int32_t stack[128]{};
 	std::int32_t sp{ 0 };
@@ -1024,21 +1095,34 @@ inline int bvh::aabb::longest_axis() const
 	return 2;
 }
 
+// Ujian Slab AABB Pantas (Early-Exit & Branchless Min/Max)
 inline bool bvh::aabb::intersects_ray(const float origin[3], const float inv_dir[3], float max_t) const
 {
-	auto tmin{ 0.0f };
-	auto tmax = max_t;
-	for (int i = 0; i < 3; ++i) {
-		auto t0 = (this->mins[i] - origin[i]) * inv_dir[i];
-		auto t1 = (this->maxs[i] - origin[i]) * inv_dir[i];
-		if (inv_dir[i] < 0.0f) {
-			const auto tmp = t0; t0 = t1; t1 = tmp;
-		}
-		if (t0 > tmin) tmin = t0;
-		if (t1 < tmax) tmax = t1;
-		if (tmax < tmin) return false;
-	}
-	return true;
+	const float t0_x = (mins[0] - origin[0]) * inv_dir[0];
+	const float t1_x = (maxs[0] - origin[0]) * inv_dir[0];
+	float tmin = (t0_x < t1_x) ? t0_x : t1_x;
+	float tmax = (t0_x > t1_x) ? t0_x : t1_x;
+
+	const float t0_y = (mins[1] - origin[1]) * inv_dir[1];
+	const float t1_y = (maxs[1] - origin[1]) * inv_dir[1];
+	const float tmin_y = (t0_y < t1_y) ? t0_y : t1_y;
+	const float tmax_y = (t0_y > t1_y) ? t0_y : t1_y;
+
+	// Jika unjuran paksi X dan Y tidak bertindih, keluar serta-merta tanpa kira paksi Z
+	if (tmin > tmax_y || tmin_y > tmax) return false;
+	if (tmin_y > tmin) tmin = tmin_y;
+	if (tmax_y < tmax) tmax = tmax_y;
+
+	const float t0_z = (mins[2] - origin[2]) * inv_dir[2];
+	const float t1_z = (maxs[2] - origin[2]) * inv_dir[2];
+	const float tmin_z = (t0_z < t1_z) ? t0_z : t1_z;
+	const float tmax_z = (t0_z > t1_z) ? t0_z : t1_z;
+
+	if (tmin > tmax_z || tmin_z > tmax) return false;
+	if (tmin_z > tmin) tmin = tmin_z;
+	if (tmax_z < tmax) tmax = tmax_z;
+
+	return (tmin < max_t) && (tmax > 0.0f);
 }
 
 inline void bvh::rebuild_accel()

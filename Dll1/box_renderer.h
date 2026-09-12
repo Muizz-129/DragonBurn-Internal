@@ -47,7 +47,7 @@ public:
             depth_cnt++;
         }
         if (depth_cnt < 3) return;
-        avg_depth /= depth_cnt;
+        avg_depth /= static_cast<float>(depth_cnt);
 
         static constexpr int CENTER_BONES[] = {
             BONE_HEAD, BONE_NECK, BONE_SPINE1, BONE_SPINE2, BONE_PELVIS
@@ -58,14 +58,15 @@ public:
             center_cnt++;
         }
         if (center_cnt == 0) return;
-        float center_x = center_x_sum / center_cnt;
+        float center_x = center_x_sum / static_cast<float>(center_cnt);
 
         float ds = g_settings.depth_scale;
         if (is_scoped) ds *= 2.0f;
 
-        float head_extra = g_settings.head_radius * ds / avg_depth;
-        float pad_y = g_settings.box_padding_y * ds / avg_depth;
-        float pad_x = g_settings.box_padding_x * ds / avg_depth;
+        float inv_depth = 1.0f / (std::max)(avg_depth, 0.1f);
+        float head_extra = g_settings.head_radius * ds * inv_depth;
+        float pad_y = g_settings.box_padding_y * ds * inv_depth;
+        float pad_x = g_settings.box_padding_x * ds * inv_depth;
 
         raw_top -= (head_extra + pad_y);
         raw_bot += pad_y * 0.5f;
@@ -80,6 +81,12 @@ public:
         float y0 = raw_top;
         float y1 = raw_bot;
 
+        // 1. Frustum Culling: Langkau jika entiti berada sepenuhnya di luar skrin
+        const ImVec2& display = ImGui::GetIO().DisplaySize;
+        if (x1 < -50.0f || x0 > display.x + 50.0f || y1 < -50.0f || y0 > display.y + 50.0f) {
+            return;
+        }
+
         float box_thick = g_settings.box_thickness;
 
         if (g_settings.draw_box)
@@ -91,17 +98,14 @@ public:
 
         if (g_settings.draw_health_text && p.health < 100 && font)
         {
-            float bw = 3;
-            float bx = x0 - (g_settings.draw_healthbar ? bw + 4 : 2);
-            float bh = y1 - y0;
-            float hp = std::clamp(p.health / 100.0f, 0.0f, 1.0f);
-            float filled = bh * hp;
+            float bw = 3.0f;
+            float bx = x0 - (g_settings.draw_healthbar ? bw + 4.0f : 2.0f);
 
             char txt[8];
             snprintf(txt, sizeof(txt), "%d", p.health);
             ImVec2 ts = font->CalcTextSizeA(g_settings.hp_font_size, FLT_MAX, 0.0f, txt);
 
-            float tx = floorf(bx - ts.x - 3);
+            float tx = floorf(bx - ts.x - 3.0f);
             float ty = floorf((y0 + y1) * 0.5f - ts.y * 0.5f);
 
             ImU32 outline_col = apply_opacity(float4_to_col(g_settings.hp_text_shadow_color), opacity);
@@ -208,29 +212,34 @@ private:
             break;
         }
         case BoxStyle::DASHED: {
-            float dash = 8.0f, gap = 5.0f;
-            auto dashed_line = [&](ImVec2 a, ImVec2 b, ImU32 col, float thick) {
-                float dx = b.x - a.x, dy = b.y - a.y;
-                float len = sqrtf(dx * dx + dy * dy);
-                if (len < 1) return;
-                float nx = dx / len, ny = dy / len;
-                float pos = 0;
-                while (pos < len) {
-                    float end = (std::min)(pos + dash, len);
-                    d->AddLine({ a.x + nx * pos, a.y + ny * pos },
-                        { a.x + nx * end, a.y + ny * end }, col, thick);
+            // Garisan mendatar dan menegak dioptimumkan tanpa pengiraan sqrtf berulang
+            constexpr float dash = 8.0f, gap = 5.0f;
+            ImU32 bg = apply_opacity(IM_COL32(0, 0, 0, 50), opacity);
+
+            auto draw_dashed_h = [&](float y) {
+                float pos = x0;
+                while (pos < x1) {
+                    float end = (std::min)(pos + dash, x1);
+                    d->AddLine({ pos, y }, { end, y }, bg, box_thick + 2.0f);
+                    d->AddLine({ pos, y }, { end, y }, c.outline, box_thick);
                     pos = end + gap;
                 }
                 };
-            ImU32 bg = apply_opacity(IM_COL32(0, 0, 0, 50), opacity);
-            dashed_line({ x0, y0 }, { x1, y0 }, bg, box_thick + 2);
-            dashed_line({ x1, y0 }, { x1, y1 }, bg, box_thick + 2);
-            dashed_line({ x1, y1 }, { x0, y1 }, bg, box_thick + 2);
-            dashed_line({ x0, y1 }, { x0, y0 }, bg, box_thick + 2);
-            dashed_line({ x0, y0 }, { x1, y0 }, c.outline, box_thick);
-            dashed_line({ x1, y0 }, { x1, y1 }, c.outline, box_thick);
-            dashed_line({ x1, y1 }, { x0, y1 }, c.outline, box_thick);
-            dashed_line({ x0, y1 }, { x0, y0 }, c.outline, box_thick);
+
+            auto draw_dashed_v = [&](float x) {
+                float pos = y0;
+                while (pos < y1) {
+                    float end = (std::min)(pos + dash, y1);
+                    d->AddLine({ x, pos }, { x, end }, bg, box_thick + 2.0f);
+                    d->AddLine({ x, pos }, { x, end }, c.outline, box_thick);
+                    pos = end + gap;
+                }
+                };
+
+            draw_dashed_h(y0);
+            draw_dashed_h(y1);
+            draw_dashed_v(x0);
+            draw_dashed_v(x1);
             break;
         }
         }
@@ -240,7 +249,7 @@ private:
         int health, ImFont* font, float hp_font_size,
         float opacity)
     {
-        float bw = 3, bx = x0 - bw - 4, bh = y1 - y0;
+        float bw = 3.0f, bx = x0 - bw - 4.0f, bh = y1 - y0;
         float hp = std::clamp(health / 100.0f, 0.0f, 1.0f);
         float filled = bh * hp;
 
@@ -252,8 +261,8 @@ private:
             d->AddRectFilled({ bx, y0 + (bh - filled) }, { bx + bw, y1 }, bar_col);
         }
         else {
-            uint8_t r = (uint8_t)(255 * (1.0f - hp));
-            uint8_t g = (uint8_t)(255 * hp);
+            uint8_t r = static_cast<uint8_t>(255.0f * (1.0f - hp));
+            uint8_t g = static_cast<uint8_t>(255.0f * hp);
             d->AddRectFilled({ bx, y0 + (bh - filled) }, { bx + bw, y1 },
                 apply_opacity(IM_COL32(r, g, 0, 230), opacity));
         }
@@ -267,26 +276,9 @@ private:
         ImVec2 ts = font->CalcTextSizeA(name_fs, FLT_MAX, 0.0f, name);
 
         NamePosition pos = static_cast<NamePosition>(g_settings.name_position);
-
         float base_gap = 3.0f;
-        float nx = 0.0f;
-        float ny = 0.0f;
-
-        switch (pos)
-        {
-        case NamePosition::TOP:
-            nx = (x0 + x1) * 0.5f - ts.x * 0.5f;
-            ny = y0 - ts.y - base_gap;
-            break;
-
-        case NamePosition::BOTTOM:
-            nx = (x0 + x1) * 0.5f - ts.x * 0.5f;
-            ny = y1 + base_gap;
-            break;
-        }
-
-        nx += g_settings.name_offset_x;
-        ny += g_settings.name_offset_y;
+        float nx = (x0 + x1) * 0.5f - ts.x * 0.5f + g_settings.name_offset_x;
+        float ny = (pos == NamePosition::TOP ? (y0 - ts.y - base_gap) : (y1 + base_gap)) + g_settings.name_offset_y;
 
         nx = floorf(nx);
         ny = floorf(ny);
@@ -313,8 +305,7 @@ private:
         raw_factor = std::clamp(raw_factor, 0.1f, 3.0f);
 
         float dropoff = g_settings.weapon_distance_dropoff;
-        float scale = 1.0f + (raw_factor - 1.0f) * dropoff;
-        scale = std::clamp(scale, 0.6f, 1.8f);
+        float scale = std::clamp(1.0f + (raw_factor - 1.0f) * dropoff, 0.6f, 1.8f);
 
         float wep_fs = g_settings.weapon_font_size * scale;
         float gap = 2.0f;
@@ -333,8 +324,8 @@ private:
         {
             const char* src = p.weapon;
             int i = 0;
-            for (; src[i] && i < 63; i++)
-                wep_lower[i] = (char)tolower((unsigned char)src[i]);
+            for (; src[i] && i < 79; i++)
+                wep_lower[i] = static_cast<char>(tolower(static_cast<unsigned char>(src[i])));
             wep_lower[i] = 0;
         }
 
@@ -361,7 +352,7 @@ private:
             text_w = ts.x;
         }
 
-        float total_width = icon_w + (show_icon && show_text ? spacing : 0) + text_w;
+        float total_width = icon_w + (show_icon && show_text ? spacing : 0.0f) + text_w;
         float draw_x = center_x - total_width * 0.5f;
 
         ImU32 outline_col = apply_opacity(float4_to_col(g_settings.weapon_shadow_color), opacity);
@@ -373,7 +364,7 @@ private:
             ImVec2 icon_max = { floorf(draw_x + icon_w), floorf(wy + icon_h) };
 
             if (g_settings.weapon_shadow) {
-                ImU32 icon_shadow = (outline_col & 0xFF000000) | 0x00000000;
+                ImU32 icon_shadow = (outline_col & 0xFF000000);
                 d->AddImage(icon_tex,
                     { icon_min.x + 1, icon_min.y + 1 },
                     { icon_max.x + 1, icon_max.y + 1 },
