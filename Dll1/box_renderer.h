@@ -81,7 +81,7 @@ public:
         float y0 = raw_top;
         float y1 = raw_bot;
 
-        // 1. Frustum Culling: Langkau jika entiti berada sepenuhnya di luar skrin
+        // 1. Frustum Culling: Skip if the entity is completely outside the screen
         const ImVec2& display = ImGui::GetIO().DisplaySize;
         if (x1 < -50.0f || x0 > display.x + 50.0f || y1 < -50.0f || y0 > display.y + 50.0f) {
             return;
@@ -212,7 +212,7 @@ private:
             break;
         }
         case BoxStyle::DASHED: {
-            // Garisan mendatar dan menegak dioptimumkan tanpa pengiraan sqrtf berulang
+            // Horizontal and vertical lines are optimized without repeated sqrtf calculations
             constexpr float dash = 8.0f, gap = 5.0f;
             ImU32 bg = apply_opacity(IM_COL32(0, 0, 0, 50), opacity);
 

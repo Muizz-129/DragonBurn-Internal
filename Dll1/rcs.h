@@ -10,7 +10,7 @@
 
 #pragma comment(lib, "winmm.lib")
 
-// 1. Semakan kursor game (elak mouse tertarik masa buka Buy Menu / ESC)
+// 1. Press the game cursor (avoid the mouse being attracted when opening the Buy Menu / ESC)
 inline bool is_game_cursor_visible() {
     static auto last_check = std::chrono::steady_clock::now();
     static bool cached_state = false;
@@ -26,7 +26,7 @@ inline bool is_game_cursor_visible() {
     return cached_state;
 }
 
-// 2. Tapis HANYA senjata automatik (Abaikan Smoke, Flash, Bom C4, Pisau & Sniper)
+// 2. Filter for automatic weapons ONLY (Ignore Smoke, Flash, C4, Knives & Snipers)
 inline bool is_sprayable_weapon(uint16_t id) {
     switch (id) {
     case 7:  // AK-47
@@ -101,7 +101,7 @@ private:
     std::thread m_thread;
 
     std::atomic<bool> m_aimbot_locked{ false };
-    std::atomic<bool> m_target_visible{ false }; // Status musuh nampak
+    std::atomic<bool> m_target_visible{ false }; // Enemy status visible
     std::atomic<uint16_t> m_weapon_id{ 0 };
     std::atomic<float> m_sensitivity{ 1.0f };
 
@@ -128,7 +128,7 @@ private:
             size_t max_bullets = pattern->size();
 
             for (size_t i = 0; i < max_bullets; ++i) {
-                // Henti serta-merta jika menu terbuka, kursor aktif, Mouse1 dilepas, atau musuh hilang
+                // Stop immediately if the menu is open, the cursor is active, Mouse1 is released, or the enemy disappears
                 if (g_settings.menu_open || is_game_cursor_visible() ||
                     !(GetAsyncKeyState(VK_LBUTTON) & 0x8000) ||
                     !m_running.load(std::memory_order_relaxed) ||
@@ -155,7 +155,7 @@ private:
                 float moved_y = 0.0f;
 
                 while (true) {
-                    // 1. Henti HANYA jika menu buka, kursor aktif, atau Mouse 1 dilepas
+                    // 1. Stop ONLY if the menu is open, the cursor is active, or Mouse 1 is released
                     if (g_settings.menu_open || is_game_cursor_visible() ||
                         !(GetAsyncKeyState(VK_LBUTTON) & 0x8000) ||
                         !m_running.load(std::memory_order_relaxed)) {
@@ -176,7 +176,7 @@ private:
                     sum_x += delta_x;
                     sum_y += delta_y;
 
-                    // 2. Simpan nilai sudut untuk dibaca oleh aimbot.h bila ada musuh
+                    // 2. Store the angle value for `aimbot.h` to read when an enemy is present
                     accumulated_angle_pitch += delta_y * (0.022f * sens);
                     accumulated_angle_yaw += delta_x * (0.022f * sens);
 
@@ -192,8 +192,8 @@ private:
                     sum_x -= static_cast<float>(move_x);
                     sum_y -= static_cast<float>(move_y);
 
-                    // 3. JIKA TIADA MUSUH (SPRAY DINDING KOSONG):
-                    // Tarik tetikus terus guna SendInput di sini
+                    // 3. IF NO ENEMY (SPRAYING AT EMPTY WALL):
+                    // Move the mouse directly using SendInput here
                     if (!m_aimbot_locked.load(std::memory_order_relaxed)) {
                         if (move_x != 0 || move_y != 0) {
                             INPUT input = { 0 };
@@ -206,7 +206,7 @@ private:
                     }
 
                     if (progress >= 1.0f) break;
-                    Sleep(2); // Sleep 2ms beri rehat pada CPU supaya FPS tak drop
+                    Sleep(2); // A 2ms sleep gives the CPU a rest so the FPS doesn't drop
                 }
 
                 accumulated_time += delay;
@@ -220,7 +220,7 @@ private:
         m_recoil_pitch.store(0.0f, std::memory_order_relaxed);
         m_recoil_yaw.store(0.0f, std::memory_order_relaxed);
 
-        // Jimatkan CPU: Sleep(10) semasa menanti Mouse1 dilepaskan (bukan Sleep(1))
+        // Save CPU: Sleep(10) while waiting for Mouse1 to be released (instead of Sleep(1))
         while ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) && m_running.load(std::memory_order_relaxed)) {
             Sleep(10);
         }
@@ -234,12 +234,12 @@ private:
                     continue;
                 }
 
-                // HANYA jalan jika Mouse 1 ditekan DAN musuh sedang nampak
+                // Only move if Mouse 1 is pressed AND an enemy is visible
                 if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) && m_target_visible.load(std::memory_order_relaxed)) {
                     uint16_t weapon_id = m_weapon_id.load(std::memory_order_relaxed);
                     float sens = m_sensitivity.load(std::memory_order_relaxed);
 
-                    // Tapis: Senjata automatik sahaja
+                    // Filter: Automatic weapons only
                     if (is_sprayable_weapon(weapon_id)) {
                         compensation_sequence(weapon_id, sens);
                     }
@@ -247,7 +247,7 @@ private:
             }
             catch (...) {
             }
-            // Jimatkan 75% kitaran CPU thread semasa idle: 4ms sleep memberi tindak balas segera tanpa choke CPU
+            // Save 75% of current thread CPU cycles during idle: a 4ms sleep provides immediate responsiveness without CPU choking
             Sleep(4);
         }
     }

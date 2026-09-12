@@ -15,7 +15,7 @@ namespace Hooks {
 
     inline Present_t* g_pPresentPtr = nullptr;
     inline ResizeBuffers_t* g_pResizePtr = nullptr;
-    inline std::atomic<bool> g_Unloading{ false }; // Flag keselamatan semasa eject
+    inline std::atomic<bool> g_Unloading{ false }; // Safety flag during ejection
 
 #define PRESENT_PATTERN "48 89 5C 24 ? 48 89 6C 24 ? 56 57 41 54 41 56 41 57 48 83 EC ? 41 8B F0"
 #define STEAM_FALLBACK_PRESENT_OFFSET 0x162200
@@ -104,7 +104,7 @@ namespace Hooks {
             return (oPresent) ? oPresent(sc, sync, flags) : E_FAIL;
         }
 
-        // Jika proses unload sedang berjalan, terus panggil original tanpa sentuh ImGui
+        // If the unload process is underway, continue calling the original without touching ImGui
         if (g_Unloading.load(std::memory_order_relaxed)) {
             return oPresent(sc, sync, flags);
         }
@@ -189,10 +189,10 @@ namespace Hooks {
     }
 
     inline void unhook() {
-        // 1. Kunci render frame serta-merta
+        // 1. Lock render frame immediately
         g_Unloading.store(true, std::memory_order_seq_cst);
 
-        // 2. Pulihkan penuding asal Steam Overlay
+        // 2. Restore the original Steam Overlay cursor
         if (g_pPresentPtr && oPresent && g_pResizePtr && oResizeBuffers) {
             DWORD oldProt = 0;
             if (VirtualProtect(g_pPresentPtr, sizeof(void*) * 2, PAGE_READWRITE, &oldProt)) {
@@ -202,9 +202,9 @@ namespace Hooks {
             }
         }
 
-        // 3. Beri masa rehat untuk sebarang in-flight frame selesai
+        // 3. Allow a pause for any in-flight frames to complete
         Sleep(200);
 
-        // JANGAN letak "oPresent = nullptr;" di sini!
+        // DO NOT put "oPresent = nullptr;" here!
     }
 }

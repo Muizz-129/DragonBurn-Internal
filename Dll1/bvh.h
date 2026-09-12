@@ -799,7 +799,7 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 		}
 	}
 
-	// Kira normal dan koordinat titik sentuh sekali sahaja pada akhir fungsi
+	// Calculate the normal and the coordinates of the point of tangency at the end of the function
 	if (best_ti != -1)
 	{
 		const auto& tri = this->m_triangles[best_ti];
@@ -826,7 +826,7 @@ inline bvh::trace_result bvh::trace_ray(const Vec3& start, const Vec3& end, std:
 	return result;
 }
 
-// Semakan keterlihatan ultra-laju: Keluar serta-merta pada segitiga halangan pertama
+// Ultra-fast visibility check: Exit immediately at the first hazard triangle
 inline bool bvh::is_occluded(const Vec3& start, const Vec3& end, float max_fraction) const
 {
 	std::shared_lock lock(this->m_mutex);
@@ -885,7 +885,7 @@ inline bool bvh::is_occluded(const Vec3& start, const Vec3& end, float max_fract
 				const auto t = f * (e2x * qx + e2y * qy + e2z * qz);
 				if (t > 1e-5f && t <= cut_dist)
 				{
-					return true; // Dinding dikesan, keluar terus tanpa proses baki nod
+					return true; //Wall detected, exit directly without processing remaining nodes
 				}
 			}
 		}
@@ -1095,7 +1095,7 @@ inline int bvh::aabb::longest_axis() const
 	return 2;
 }
 
-// Ujian Slab AABB Pantas (Early-Exit & Branchless Min/Max)
+// Efficient AABB Slab Test (Early-Exit & Branchless Min/Max)
 inline bool bvh::aabb::intersects_ray(const float origin[3], const float inv_dir[3], float max_t) const
 {
 	const float t0_x = (mins[0] - origin[0]) * inv_dir[0];
@@ -1108,7 +1108,7 @@ inline bool bvh::aabb::intersects_ray(const float origin[3], const float inv_dir
 	const float tmin_y = (t0_y < t1_y) ? t0_y : t1_y;
 	const float tmax_y = (t0_y > t1_y) ? t0_y : t1_y;
 
-	// Jika unjuran paksi X dan Y tidak bertindih, keluar serta-merta tanpa kira paksi Z
+	// If the X and Y axis projections do not overlap, exit immediately without considering the Z axis
 	if (tmin > tmax_y || tmin_y > tmax) return false;
 	if (tmin_y > tmin) tmin = tmin_y;
 	if (tmax_y < tmax) tmax = tmax_y;

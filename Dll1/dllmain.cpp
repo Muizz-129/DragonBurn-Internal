@@ -29,7 +29,7 @@ static void init_console() {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    // 1. Output: Hidupkan TrueColor & tetapkan buffer 3000 baris untuk scroll
+    // 1. Output: Enable TrueColor & set a 3000-line scrollback buffer
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD dwOutMode = 0;
     if (GetConsoleMode(hOut, &dwOutMode)) {
@@ -41,15 +41,15 @@ static void init_console() {
     if (GetConsoleScreenBufferInfo(hOut, &csbi)) {
         COORD newSize;
         newSize.X = csbi.dwSize.X;
-        newSize.Y = 3000; // Ruang scroll ke atas
+        newSize.Y = 3000; // Scroll-to-top area
         SetConsoleScreenBufferSize(hOut, newSize);
     }
 
-    // 2. Input: Matikan QuickEdit Mode supaya konsol TIDAK BEKU bila diklik
+    // 2. Input: Disable QuickEdit Mode so the console does NOT FREEZE when clicked
     HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
     DWORD dwInMode = 0;
     if (GetConsoleMode(hIn, &dwInMode)) {
-        // Wajib sertakan ENABLE_EXTENDED_FLAGS bila ubah QUICK_EDIT_MODE
+        // You must include ENABLE_EXTENDED_FLAGS when changing QUICK_EDIT_MODE
         dwInMode &= ~ENABLE_QUICK_EDIT_MODE;
         dwInMode |= ENABLE_EXTENDED_FLAGS;
         SetConsoleMode(hIn, dwInMode);
@@ -81,26 +81,26 @@ static void cleanup_console() {
 DWORD WINAPI MainThread(LPVOID lpParam) {
     HMODULE hModule = reinterpret_cast<HMODULE>(lpParam);
 
-    // 1. Cipta konsol debug dan paparkan banner
+    // 1. Create a debug console and display a banner
     init_console();
     print_dragonburn_banner();
 
-    // 2. Tunggu sehingga client.dll dan gameoverlayrenderer64.dll sedia
+    // 2. Wait until client.dll and gameoverlayrenderer64.dll are ready
     while (!GetModuleHandleA("client.dll") || !GetModuleHandleA("gameoverlayrenderer64.dll")) {
         Sleep(200);
     }
 
-    // 3. Muat konfigurasi
+    // 3. Load configuration
     Config::load(get_dll_directory() + "config.ini");
 
     // 4. Hook Steam Overlay (DirectX Render)
     Hooks::hook_thread(lpParam);
 
-    // 5. Mulakan thread Aimbot (dwViewAngles) dan RCS
+    // 5. Start the Aimbot (dwViewAngles) and RCS thread
     start_aimbot_thread();
     g_rcs.start();
 
-    // 6. Gelung pemantau butang keluar (VK_INSERT)
+    // 6. Exit button monitor loop (VK_INSERT)
     while (true) {
         if (g_settings.key_exit && (GetAsyncKeyState(g_settings.key_exit) & 0x8000)) {
             while (GetAsyncKeyState(g_settings.key_exit) & 0x8000) {
@@ -111,7 +111,7 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
         Sleep(100);
     }
 
-    // 7. Urutan pembersihan sebelum DLL dikeluarkan
+    // 7. Cleaning sequence before the DLL is removed
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Stopping background threads...\n";
     stop_aimbot_thread();
     g_rcs.stop();

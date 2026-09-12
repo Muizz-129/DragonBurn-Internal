@@ -14,7 +14,7 @@
 
 struct AimbotTarget {
     bool valid = false;
-    bool is_visible = false; // Membaca terus status dari render tanpa raytrace berulang
+    bool is_visible = false; // Continuously reading the status from the non-raytraced render loop
     int health = 0;
     int team = 0;
     uint64_t bSpottedByMask = 0;
@@ -126,7 +126,7 @@ static inline void aimbot_tick() {
         Vec3 pos;
     };
 
-    // 1. Semak sasaran sedia ada
+    // 1. Review existing targets
     if (locked_target_idx >= 1 && locked_target_idx < 64) {
         const auto& lt = frame.targets[locked_target_idx];
         if (lt.valid && lt.health > 0 && lt.health <= 100 && (!g_settings.aimbot_team_check || lt.team != frame.local_team)) {
@@ -163,7 +163,7 @@ static inline void aimbot_tick() {
         }
     }
 
-    // 2. Cari sasaran baharu jika tiada yang terkunci
+    // 2. Look for a new target if none is locked on
     if (!found) {
         for (int i = 1; i < 64; i++) {
             const auto& t = frame.targets[i];
@@ -210,8 +210,7 @@ static inline void aimbot_tick() {
         }
     }
 
-    // 3. Tulis terus sudut ke memori dwViewAngles (Bebas Lag & Bebas Crash)
-  // 3. Gerakan tetikus SendInput yang stabil & selamat
+    // 3. Directly write angles to the dwViewAngles memory (Lag-free & Crash-free)
     if (found) {
         g_rcs.set_aimbot_locked(true);
         g_rcs.set_target_visible(true);
@@ -224,14 +223,14 @@ static inline void aimbot_tick() {
             desired.yaw -= g_rcs.get_recoil_yaw();
         }
 
-        // KUNCI 1: Kunci pitch supaya tidak melepasi had enjin Source (-89 hingga +89)
+        // KEY 1: Pitch lock to prevent exceeding engine limits (-89 to +89)
         desired.pitch = std::clamp(desired.pitch, -89.0f, 89.0f);
         desired.yaw = normalize_yaw(desired.yaw);
 
         float delta_pitch = desired.pitch - view_angles.pitch;
         float delta_yaw = normalize_yaw(desired.yaw - view_angles.yaw);
 
-        // KUNCI 2: Elak crash jika ada pengiraan menghasilkan NaN / infiniti
+        // KEY 2: Avoid a crash if a calculation results in NaN or infinity
         if (std::isnan(delta_pitch) || std::isnan(delta_yaw) ||
             std::isinf(delta_pitch) || std::isinf(delta_yaw)) {
             aim_error_x = 0.0f;
@@ -253,7 +252,7 @@ static inline void aimbot_tick() {
         aim_error_x += move_x;
         aim_error_y += move_y;
 
-        // Pulihkan nilai jika akumulasi ralat menjadi rosak
+        // Restore the value if the accumulated error becomes corrupted
         if (std::isnan(aim_error_x) || std::isnan(aim_error_y)) {
             aim_error_x = 0.0f;
             aim_error_y = 0.0f;
@@ -266,8 +265,8 @@ static inline void aimbot_tick() {
         aim_error_x -= static_cast<float>(dx);
         aim_error_y -= static_cast<float>(dy);
 
-        // KUNCI 3: Hadkan anjakan maksimum per frame (Elak lagging / input choke)
-        // Maksimum 35 pixel per tick sudah cukup laju dan tidak membebankan mesej Windows
+        // KEY 3: Limit maximum displacement per frame (Avoid lagging / input choke)
+        // A maximum of 35 pixels per tick is fast enough and does not overburden Windows messages
         dx = std::clamp(dx, -35, 35);
         dy = std::clamp(dy, -35, 35);
 
@@ -307,7 +306,7 @@ static inline void aimbot_thread_func() {
             );
         }
         else {
-            // KUNCI: Wajib tidur sekurang-kurangnya 1ms supaya CPU tidak tercekik 100%
+            // KEY: Must sleep for at least 1ms so the CPU doesn't get pegged at 100% usage
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }

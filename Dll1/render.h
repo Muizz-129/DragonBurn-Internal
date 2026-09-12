@@ -251,9 +251,9 @@ namespace Render {
                             state.map_name);
                         g_grenades.draw(draw, state.local.x, state.local.y, state.local.z, screen_w, screen_h);
                     }
-                } // tutup if (g_settings.master_switch)
-            } // tutup if (map_ready)
-        } // tutup if (is_in_game)
+                } // closed if (g_settings.master_switch)
+            } // closed if (map_ready)
+        } // closed if (is_in_game)
 
         g_grenades.render_popups();
 

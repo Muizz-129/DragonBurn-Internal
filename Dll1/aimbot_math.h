@@ -30,7 +30,7 @@ inline float normalize_pitch(float pitch)
     return clampf(pitch, -89.0f, 89.0f);
 }
 
-// Tukar sudut Euler kepada vektor unit hadapan untuk penapis kon pantas
+// Convert Euler angles to a forward unit vector for the fast cone filter
 inline Vec3 angle_to_forward(const AimAngles& angles)
 {
     float pitch_rad = angles.pitch * DEG2RAD;
