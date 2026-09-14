@@ -15,12 +15,12 @@
 inline std::atomic<bool> g_triggerbot_running{ false };
 
 static inline void triggerbot_tick() {
-    // 1. Tapis menu & suis utama
+    // 1. Main Menu & Sub-menu
     if (!g_settings.master_switch || !g_settings.triggerbot_enabled || g_settings.menu_open) {
         return;
     }
 
-    // 2. Semak syarat Always Active atau Hotkey
+    // 2. Check the Always Active or Hotkey conditions
     if (!g_settings.triggerbot_always_on) {
         int key = g_settings.key_triggerbot ? g_settings.key_triggerbot : 'X';
         if (!(GetAsyncKeyState(key) & 0x8000)) {
@@ -33,12 +33,12 @@ static inline void triggerbot_tick() {
         return;
     }
 
-    // 3. Tapis mod Scoped Only (cth: AWP / Scout)
+    // 3. Tapis mod Scoped Only (example: AWP / Scout)
     if (g_settings.triggerbot_scoped_only && !frame.is_scoped) {
         return;
     }
 
-    // 4. Baca ID entiti di bawah crosshair
+    // 4. Read the entity ID under the crosshair
     int crosshair_id = read_mem<int>(frame.local_pawn + g_offsets.C_CSPlayerPawn.m_iIDEntIndex);
     if (crosshair_id <= 0) return;
 
@@ -48,29 +48,29 @@ static inline void triggerbot_tick() {
     uintptr_t entity_list = read_mem<uintptr_t>(client_base + g_offsets.client.dwEntityList);
     if (!entity_list) return;
 
-    // 5. Dapatkan pointer entiti musuh menggunakan resolve_handle
+    // 5. Get the enemy entity pointer using resolve_handle
     uintptr_t target_pawn = EntityList::resolve_handle(entity_list, static_cast<uint32_t>(crosshair_id));
     if (!target_pawn || target_pawn == frame.local_pawn) return;
 
-    // 6. Semak kesihatan & pasukan sasaran
+    // 6. Health check & target team
     int target_health = read_mem<int>(target_pawn + g_offsets.C_BaseEntity.m_iHealth);
     int target_team = read_mem<int>(target_pawn + g_offsets.C_BaseEntity.m_iTeamNum);
 
     if (target_health <= 0 || target_health > 100) return;
     if (target_team == frame.local_team) return;
 
-    // 7. Kelewatan reaksi (Legit Delay)
+    // 7. Excessive reaction (Legit Delay)
     float delay = g_settings.triggerbot_delay;
     if (delay > 0.0f) {
         Sleep(static_cast<DWORD>(delay));
     }
 
-    // 8. Tembak
+    // 8. Shoot
     mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
     Sleep(20);
     mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
 
-    // Cooldown mengelakkan tembakan bertindih
+    // The cooldown prevents overlapping shots
     Sleep(120);
 }
 
