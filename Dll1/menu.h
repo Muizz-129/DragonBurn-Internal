@@ -21,6 +21,7 @@
 #include "weapon_icons.h"
 #include "theme_manager.h"
 #include "bvh.h"
+#include "grenades.h"
 
 #include "../theme/colors.h"
 #include "../theme/layout.h"
@@ -493,23 +494,32 @@ private:
         ImGui::NextColumn();
         ImGui::SetCursorPosY(4.f);
 
+        // ================= GRENADE HELPER =================
         os::gradient_text("Grenade Helper");
         os::put_switch("Enabled", 5.f, ImGui::GetFrameHeight() * 1.7f, &g_settings.grenade_helper_enabled);
-        {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.f);
-            ImGui::TextDisabled("Filter");
-            ImGui::SameLine();
-            os::align_right(160.f);
-            ImGui::SetNextItemWidth(160.f);
-            ImGui::Combo("###nade_filt", &m_filter_idx, nade_filter_items, IM_ARRAYSIZE(nade_filter_items));
-            update_nade_filter();
+        if (g_settings.grenade_helper_enabled) {
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.f);
+                ImGui::TextDisabled("Filter");
+                ImGui::SameLine();
+                os::align_right(160.f);
+                ImGui::SetNextItemWidth(160.f);
+                ImGui::Combo("###nade_filt", &m_filter_idx, nade_filter_items, IM_ARRAYSIZE(nade_filter_items));
+                update_nade_filter();
+            }
+
+            os::put_color_edit("Circle Color", "###ncc", 5.f, 30.f, g_settings.grenade_circle_color);
+            os::put_color_edit("Active Circle", "###nac", 5.f, 30.f, g_settings.grenade_circle_active_color);
+            os::put_color_edit("Aim Line", "###nal", 5.f, 30.f, g_settings.grenade_aim_line_color);
+            os::put_color_edit("Text Color", "###ntc", 5.f, 30.f, g_settings.grenade_text_color);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Call the Custom Spots manager here
+            g_grenades.render_spot_list();
         }
-        os::put_color_edit("Circle", "###ncc", 5.f, 30.f, g_settings.grenade_circle_color);
-        os::put_color_edit("Active Circle", "###nac", 5.f, 30.f, g_settings.grenade_circle_active_color);
-        os::put_color_edit("Aim Line", "###nal", 5.f, 30.f, g_settings.grenade_aim_line_color);
-        os::put_color_edit("Text", "###ntc", 5.f, 30.f, g_settings.grenade_text_color);
-        os::put_slider_float("Circle Radius", 5.f, &g_settings.grenade_circle_radius, 10.f, 150.f, "%.0f");
-        os::put_slider_float("Circle Thick.", 5.f, &g_settings.grenade_circle_thickness, 0.5f, 4.f, "%.1f");
 
         ImGui::Columns(1);
     }

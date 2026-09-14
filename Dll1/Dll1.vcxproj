@@ -231,6 +231,7 @@ if exist "$(ProjectDir)themes" xcopy /E /I /Y "$(ProjectDir)themes" "$(OutDir)th
     <ClInclude Include="settings.h" />
     <ClInclude Include="spectators.h" />
     <ClInclude Include="theme_manager.h" />
+    <ClInclude Include="triggerbot.h" />
     <ClInclude Include="types.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="visible_esp.h" />

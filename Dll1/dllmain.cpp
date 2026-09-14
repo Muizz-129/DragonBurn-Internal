@@ -8,6 +8,7 @@
 #include "aimbot.h"
 #include "rcs.h"
 #include "settings.h"
+#include "triggerbot.h"
 
 // ASCII color (24-bit TrueColor)
 #define C_MINT   "\033[38;2;0;255;180m"
@@ -98,6 +99,7 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
 
     // 5. Start the Aimbot (dwViewAngles) and RCS thread
     start_aimbot_thread();
+    start_triggerbot_thread();
     g_rcs.start();
 
     // 6. Exit button monitor loop (VK_INSERT)
@@ -114,6 +116,7 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
     // 7. Cleaning sequence before the DLL is removed
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Stopping background threads...\n";
     stop_aimbot_thread();
+    stop_triggerbot_thread();
     g_rcs.stop();
 
     std::cout << "   " C_MUTED "[" C_RED "*" C_MUTED "] " C_RESET "Restoring Steam Overlay pointers...\n";
