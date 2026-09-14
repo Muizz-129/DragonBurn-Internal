@@ -33,7 +33,7 @@ static inline void triggerbot_tick() {
         return;
     }
 
-    // 3. Tapis mod Scoped Only (example: AWP / Scout)
+    // 3. Filter mod Scoped Only (example: AWP / Scout)
     if (g_settings.triggerbot_scoped_only && !frame.is_scoped) {
         return;
     }
